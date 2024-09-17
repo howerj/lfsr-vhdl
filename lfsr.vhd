@@ -14,7 +14,9 @@ entity lfsr is
 		asynchronous_reset: boolean    := true;   -- use asynchronous reset if true, synchronous if false
 		delay:              time       := 0 ns;   -- simulation only, gate delay
 		N:                  positive   := 16;     -- size the CPU
-		jspec:              std_ulogic_vector(4 downto 0) := "11111"; -- Jump specification
+		lfsr_length:        positive   := 8;      -- size of the LFSR polynomial
+		jspec:              std_ulogic_vector(4 downto 0) := "11100"; -- Jump specification
+		polynomial:         std_ulogic_vector(7 downto 0) := x"B8";
 		non_blocking_input: boolean    := false;  -- if true, input will be -1 if there is no input
 		strict_io:          boolean    := true;   -- if true, I/O happens when `a` or `b` are -1, else when high bit set
 		debug:              natural    := 0);     -- debug level, 0 = off
@@ -37,40 +39,56 @@ end;
 architecture rtl of lfsr is
 	type state_t is (
 		S_RESET,  -- Starting State
-		S_LOADI,
-		S_LOADA,
+		S_INSTRUCTION,
+		S_INDIRECT,
 		S_ALU,   
-		S_STORE_ALU,
-		S_LOAD_ALU, 
-		S_JMP,   -- No Jump
+		S_STORE,
+		S_LOAD, 
+		S_NEXT,   -- No Jump
 		S_IN,     -- Wait for input
 		S_OUT,    -- Output byte when ready
 		S_HALT);  -- Stop for it is the time of hammers
 
+	-- TODO: Customizable Program Counter, LFSR N-Bit vs Program Counter N-Bit
 	type registers_t is record
 		acc:    std_ulogic_vector(N - 1 downto 0); -- Multi purpose register
-		pc:     std_ulogic_vector(N - 1 downto 0); -- Program Counter
+		val:    std_ulogic_vector(N - 1 downto 0);
+		pc:     std_ulogic_vector(7 downto 0); -- Program Counter
+		alu:    std_ulogic_vector(2 downto 0);
 		state:  state_t;    -- CPU State Register
 		stop:   std_ulogic; -- CPU Halt Flag
 		input:  std_ulogic; -- CPU Instruction-is-input Flag
 		output: std_ulogic; -- CPU Instruction-is-output Flag
+		indirect: std_ulogic; 
 	end record;
 
 	constant registers_default: registers_t := (
-		b      => (others => '0'),
-		la     => (others => '0'),
+		acc    => (others => '0'),
+		val    => (others => '0'),
 		pc     => (others => '0'),
+		alu    => (others => '0'),
 		state  => S_RESET,
 		stop   => '0',
 		input  => '0',
-		output => '0');
+		output => '0',
+		indirect => '0');
 
 	signal c, f: registers_t := registers_default; -- All state is captured in here
 	signal jump, zero, ones, high, io, dop: std_ulogic := '0'; -- Transient CPU Flags
-	signal sub, npc: std_ulogic_vector(N - 1 downto 0) := (others => '0');
+	signal npc: std_ulogic_vector(7 downto 0) := (others => '0');
 
 	constant AZ: std_ulogic_vector(N - 1 downto 0) := (others => '0'); -- All Zeros
 	constant AO: std_ulogic_vector(N - 1 downto 0) := (others => '1'); -- All Ones
+
+	-- These constants are used to index into the jump specification, this allows
+	-- us to make alternative OISC machines by specifying a generic instead of making
+	-- an entirely new machine.
+	constant JS_C:   integer := 0; -- Jump on all condition or'd = '1' or '0'
+	constant JS_ZEN: integer := 1; -- Enable Jumping on zero comparison 
+	constant JS_ZC:  integer := 2; -- '1' = Jump on Zero, '0' = Jump on Non-Zero if enabled
+	constant JS_NEN: integer := 3; -- Enable Jumping on negative (high bit set)
+	constant JS_NC:  integer := 4; -- '1' = Jump on Negative, '0' = Jump on 
+
 
 	-- Obviously this does not synthesize, which is why synthesis is turned
 	-- off for the body of this function, it does make debugging much easier
@@ -87,8 +105,7 @@ architecture rtl of lfsr is
 		if debug >= 2 then
 			write(oline, int(c.pc)  & ": ");
 			write(oline, state_t'image(c.state) & HT);
-			write(oline, int(c.b)   & " ");
-			write(oline, int(c.la)  & " ");
+			write(oline, int(c.acc)   & " ");
 			if debug >= 3 and c.state /= f.state then
 				write(oline, state_t'image(c.state) & " => ");
 				write(oline, state_t'image(f.state));
@@ -105,15 +122,16 @@ begin
 	--   assert not (re = '1' and we = '1') severity warning;
 	--   assert not (io_re = '1' and io_we = '1') severity warning;
 
+	assert lfsr_length = polynomial'length severity failure;
 	assert not (c.input = '1' and c.output = '1') report "Input and Output flag set a the same time" severity warning;
 	assert N >= 8 report "LFSR machine width too small, must be greater or equal to 8 bits" severity failure;
 
+	-- TODO: Optional counter / LFSR next state
 	npc   <= std_ulogic_vector(unsigned(c.pc) + 1) after delay;
-	sub   <= std_ulogic_vector(unsigned(i) - unsigned(c.la)) after delay;
-	zero  <= '1' when jspec(JS_ZEN) = '1' and c.la = AZ else '0' after delay;
-	jump  <= '1' when (jspec(JS_NEN) = '1' and c.la(c.la'high) = jspec(JS_NC)) or zero = jspec(JS_ZC) else '0' after delay;
-	o     <= c.la after delay;
-	obyte <= c.la(obyte'range) after delay;
+	zero  <= '1' when jspec(JS_ZEN) = '1' and c.acc = AZ else '0' after delay;
+	jump  <= '1' when (jspec(JS_NEN) = '1' and c.acc(c.acc'high) = jspec(JS_NC)) or zero = jspec(JS_ZC) else '0' after delay;
+	o     <= c.acc after delay;
+	obyte <= c.acc(obyte'range) after delay;
 	ones  <= '1' when strict_io and i = AO else '0' after delay;
 	high  <= '1' when (not strict_io) and i(i'high) = '1' else '0' after delay;
 	io    <= '1' when ones = '1' or high = '1' else '0' after delay;
@@ -129,109 +147,91 @@ begin
 				c.state <= S_RESET after delay;
 			else
 				print_debug_info;
-
-				if c.state = S_RESET then assert f.state = S_A severity warning; end if;
-				if c.state = S_HALT  then assert f.state = S_HALT severity warning; end if;
-				if c.state = S_A     then assert f.state = S_B or f.state = S_A or f.state = S_HALT severity warning; end if;
-				if c.state = S_B     then assert f.state = S_LA or f.state = S_IN severity warning; end if;
-				if c.state = S_LA    then assert f.state = S_LB or f.state = S_OUT severity warning; end if;
-				if c.state = S_LB    then assert f.state = S_STORE severity warning; end if;
-				if c.state = S_STORE then assert f.state = S_JMP or f.state = S_NJMP severity warning; end if;
-				if c.state = S_JMP   then assert f.state = S_A severity warning; end if;
-				if c.state = S_NJMP  then assert f.state = S_A severity warning; end if;
-				if c.state = S_IN    then assert f.state = S_IN or f.state = S_STORE severity warning; end if;
-				if c.state = S_OUT   then assert f.state = S_OUT or f.state = S_A severity warning; end if;
+				-- TODO: Assert next state
 			end if;
 		end if;
 	end process;
 
-	process (c, i, npc, io, jump, sub, ibyte, obsy, ihav, pause) begin
+	process (c, i, npc, io, jump, ibyte, obsy, ihav, pause) begin
 		f <= c after delay;
 		halted <= '0' after delay;
 		io_we <= '0' after delay;
 		io_re <= '0' after delay;
 		dop <= '0' after delay; -- read enabled when `dop='0'`, write otherwise
-		a <= c.pc after delay;
+		a <= (others => '0') after delay;
+		a(c.pc'range) <= c.pc after delay;
 		blocked <= '0' after delay;
 		if c.pc(c.pc'high) = '1' then f.stop <= '1' after delay; end if;
 
 		case c.state is
 		when S_RESET => 
 			f <= registers_default after delay;
-			f.state <= S_A after delay;
+			f.state <= S_INSTRUCTION after delay;
 			a <= (others => '0') after delay;
-		when S_A =>
-			f.state <= S_B after delay;
-			f.la <= i after delay;
-			a <= npc after delay;
-			f.pc <= npc after delay;
-			f.input <= '0' after delay;
-			f.output <= '0' after delay;
-
-			if io = '1' then
-				f.input <= '1' after delay;
+		when S_INSTRUCTION =>
+			f.state <= S_ALU after delay;
+			f.alu <= i(i'high - 1 downto i'high - 3) after delay;
+			f.indirect <= i(i'high) after delay;
+			f.val <= (others => '0') after delay;
+			f.val(i'high - 4 downto 0) <= i(i'high - 4 downto 0) after delay;
+			if i(i'high) = '1' then
+				a <= f.val after delay;
+				f.state <= S_INDIRECT after delay;
 			end if;
-
-			if c.stop = '1' then
-				f.state <= S_HALT after delay;
-			elsif pause = '1' then
-				blocked <= '1' after delay;
-				f.state <= S_A after delay;
-			end if;
-		when S_B =>
-			f.state <= S_LA after delay;
-			f.b <= i after delay;
-			a <= c.la after delay;
-			f.pc <= npc after delay;
-			if io = '1' then
-				f.output <= '1' after delay;
-			end if;
-
-			if c.input = '1' then -- skip S_LA
-				a <= i after delay;
-				f.state <= S_IN after delay;
-				f.la <= (others => '0') after delay;
-				f.la(ibyte'range) <= ibyte after delay;
-			end if;
-		when S_LA =>
-			f.state <= S_LB after delay;
-			f.la <= i after delay;
-			a <= c.b after delay;
-			if c.output = '1' then
-				a <= c.pc after delay;
-				f.state <= S_OUT after delay;
-			end if;
-		when S_LB =>
-			f.state <= S_STORE after delay;
-			f.la <= sub after delay;
-			a <= c.pc after delay;
+		when S_INDIRECT =>
+			f.val <= i after delay;
+			f.state <= S_ALU after delay;
+		when S_ALU =>
+			-- TODO: Is this state needed?
+			f.state <= S_NEXT after delay;
+			a(npc'range) <= npc after delay;
+			case c.alu is
+			when "000" => f.acc <= c.acc and c.val after delay;
+			when "001" => f.acc <= c.acc xor c.val after delay;
+			when "010" => f.acc <= c.acc(c.acc'high - 1 downto 0) & "0" after delay;
+			when "011" => f.acc <= "0" & c.acc(c.acc'high downto 1) after delay;
+			when "100" => a <= c.val after delay; f.state <= S_LOAD after delay; if f.val(f.val'high) = '1' then f.state <= S_IN after delay; end if;
+			when "101" => a <= c.val after delay; f.state <= S_STORE after delay; if f.val(f.val'high) = '1' then f.state <= S_OUT after delay; end if;
+			when "110" => a <= c.val after delay; f.pc <= c.val(f.pc'range) after delay; f.state <= S_INSTRUCTION after delay; -- TODO: Halt condition
+			when "111" => if jump = '1' then a <= c.val after delay; f.pc <= c.val(f.pc'range) after delay; f.state <= S_INSTRUCTION after delay; end if;
+			when others =>
+			end case;
 		when S_STORE =>
-		when S_JMP =>
-		when S_IN =>
-			a <= c.b after delay;
-			f.la <= (others => '0') after delay;
-			f.la(ibyte'range) <= ibyte after delay;
-			blocked <= '1' after delay;
-			if ihav = '1' then
-				f.state <= S_STORE after delay;
-				io_re <= '1' after delay;
-				blocked <= '0' after delay;
-			elsif non_blocking_input then
-				f.state <= S_STORE after delay;
-				f.la <= (others => '1') after delay;
-				blocked <= '0' after delay;
-			end if;
-		when S_OUT =>
-			a <= npc after delay;
+			dop <= '1' after delay;
+			f.state <= S_NEXT after delay;
+		when S_LOAD =>
+			f.acc <= i after delay;
+			f.state <= S_NEXT after delay;
+		when S_NEXT =>
+			f.state <= S_NEXT after delay;
+			a(npc'range) <= npc after delay;
 			f.pc <= npc after delay;
-			blocked <= '1' after delay;
-			if obsy = '0' then
-				f.state <= S_A after delay;
-				io_we <= '1' after delay;
-				blocked <= '0' after delay;
-			end if;
+		when S_IN =>
+--			a <= c.b after delay;
+--			f.la <= (others => '0') after delay;
+--			f.la(ibyte'range) <= ibyte after delay;
+--			blocked <= '1' after delay;
+--			if ihav = '1' then
+--				f.state <= S_STORE after delay;
+--				io_re <= '1' after delay;
+--				blocked <= '0' after delay;
+--			elsif non_blocking_input then
+--				f.state <= S_STORE after delay;
+--				f.la <= (others => '1') after delay;
+--				blocked <= '0' after delay;
+--			end if;
+		when S_OUT =>
+--			a <= npc after delay;
+--			f.pc <= npc after delay;
+--			blocked <= '1' after delay;
+--			if obsy = '0' then
+--				f.state <= S_A after delay;
+--				io_we <= '1' after delay;
+--				blocked <= '0' after delay;
+--			end if;
 		when S_HALT =>
 			halted <= '1' after delay;
 		end case;
 	end process;
 end architecture;
+

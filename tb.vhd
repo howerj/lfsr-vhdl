@@ -22,7 +22,7 @@ entity tb is
 		clock_frequency:    positive := 100_000_000;
 		asynchronous_reset: boolean := false;
 		delay:              time := 0 ns;
-		debug:              integer  := 0;
+		debug:              integer  := 2;
 		baud:               positive := 115200;
 		en_uart_tbs:        boolean  := false; -- Generate UART test benches as well?
 		en_non_io_tb:       boolean  := false; -- Do not generate UART, talk directly to `system.vhd` which is faster
