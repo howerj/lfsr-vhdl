@@ -14,15 +14,13 @@ set names {
 	top.tb.gn.uut.system.cpu.o[15:0]
 	top.tb.gn.uut.system.cpu.i[15:0]
 	top.tb.gn.uut.system.cpu.c.state
-	top.tb.gn.uut.system.cpu.c.b[15:0]
-	top.tb.gn.uut.system.cpu.c.la[15:0]
-	top.tb.gn.uut.system.cpu.c.pc[15:0]
-	top.tb.gn.uut.system.cpu.c.input
-	top.tb.gn.uut.system.cpu.c.output
+	top.tb.gn.uut.system.cpu.c.pc[7:0]
+	top.tb.gn.uut.system.cpu.c.acc[15:0]
+	top.tb.gn.uut.system.cpu.c.arg[15:0]
+	top.tb.gn.uut.system.cpu.c.alu[2:0]
+	top.tb.gn.uut.system.cpu.c.indirect
 	top.tb.gn.uut.system.cpu.c.stop
-	top.tb.gn.uut.system.cpu.npc[15:0]
-	top.tb.gn.uut.system.cpu.leq
-	top.tb.gn.uut.system.cpu.neg
+	top.tb.gn.uut.system.cpu.npc[7:0]
 	top.tb.gn.uut.system.cpu.re
 	top.tb.gn.uut.system.cpu.we
 	top.tb.gn.uut.system.cpu.io_re
@@ -35,15 +33,13 @@ set names {
 	top.tb.gt.uut.system.cpu.o[15:0]
 	top.tb.gt.uut.system.cpu.i[15:0]
 	top.tb.gt.uut.system.cpu.c.state
-	top.tb.gt.uut.system.cpu.c.b[15:0]
-	top.tb.gt.uut.system.cpu.c.la[15:0]
-	top.tb.gt.uut.system.cpu.c.pc[15:0]
-	top.tb.gt.uut.system.cpu.c.input
-	top.tb.gt.uut.system.cpu.c.output
+	top.tb.gt.uut.system.cpu.c.pc[7:0]
+	top.tb.gt.uut.system.cpu.c.acc[15:0]
+	top.tb.gt.uut.system.cpu.c.val[15:0]
+	top.tb.gt.uut.system.cpu.c.alu[2:0]
+	top.tb.gt.uut.system.cpu.c.indirect
 	top.tb.gt.uut.system.cpu.c.stop
-	top.tb.gt.uut.system.cpu.npc[15:0]
-	top.tb.gt.uut.system.cpu.leq
-	top.tb.gt.uut.system.cpu.neg
+	top.tb.gt.uut.system.cpu.npc[7:0]
 	top.tb.gt.uut.system.cpu.re
 	top.tb.gt.uut.system.cpu.we
 	top.tb.gt.uut.system.cpu.io_re

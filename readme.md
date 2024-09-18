@@ -5,11 +5,14 @@
 * Email: <mailto:howe.r.j.89@gmail.com>
 * Repo: <https://github.com/howerj/lfsr-vhdl>
 
-**THIS PROJECT CURRENTLY DOES NOT WORK, IT IS A WORK IN PROGRESS**.
+**THIS PROJECT IS A WORK IN PROGRESS**.
 
-See <https://github.com/howerj/lfsr> for more information.
+This project contains a CPU written in VHDL for an FPGA using a Linear Feedback Shift 
+Register (LFSR) instead of a Program Counter, this was sometimes done to save space as 
+a LFSR requires fewer gates than an adder. 
 
-The intention is to get the system described in my other LFSR project up and
-running in VHDL on an FPGA. This should run Forth. A lot of code has been
-borrowed from <https://github.com/howerj/subleq-vhdl>.
+See <https://github.com/howerj/lfsr> for more information. 
 
+The project currently works in simulation (it outputs the startup message
+"eForth 3.3" with a new line) and accepts input (try typing "words" when the
+simulation in GHDL is running).

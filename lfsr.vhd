@@ -152,7 +152,7 @@ begin
 
 	--zero  <= '1' when jspec(JS_ZEN) = '1' and c.acc = AZ else '0' after delay;
 	--jump  <= '1' when (jspec(JS_NEN) = '1' and c.acc(c.acc'high) = jspec(JS_NC)) or zero = jspec(JS_ZC) else '0' after delay;
-	zero  <= '0' when c.acc = AZ else '1' after delay;
+	zero  <= '1' when c.acc = AZ else '0' after delay;
 	jump  <= zero after delay;
 	o     <= c.acc after delay;
 	obyte <= c.acc(obyte'range) after delay;
@@ -197,11 +197,13 @@ begin
 			if pause = '1' then
 				f.state <= S_FETCH after delay;
 			elsif i(i'high) = '1' then
-				a <= f.val after delay;
+				--a <= f.val after delay;
+				a <= (others => '0');
+				a(i'high - 4 downto 0) <= i(i'high - 4 downto 0) after delay;
 				f.state <= S_INDIRECT after delay;
 			end if;
 		when S_INDIRECT =>
-			a <= f.val after delay;
+			a <= c.val after delay;
 			f.val <= i after delay;
 			f.state <= S_ALU after delay;
 		when S_ALU => -- TODO: Is this state needed? Optimize states
@@ -212,8 +214,8 @@ begin
 			when "001" => f.acc <= c.acc xor c.val after delay;
 			when "010" => f.acc <= c.acc(c.acc'high - 1 downto 0) & "0" after delay;
 			when "011" => f.acc <= "0" & c.acc(c.acc'high downto 1) after delay;
-			when "100" => a <= c.val after delay; f.state <= S_LOAD after delay; if f.val(f.val'high) = '1' then f.state <= S_IN after delay; end if;
-			when "101" => a <= c.val after delay; f.state <= S_STORE after delay; if f.val(f.val'high) = '1' then f.state <= S_OUT after delay; end if;
+			when "100" => a <= c.val after delay; f.state <= S_LOAD after delay; if c.val(f.val'high) = '1' then f.state <= S_IN after delay; end if;
+			when "101" => a <= c.val after delay; f.state <= S_STORE after delay; if c.val(f.val'high) = '1' then f.state <= S_OUT after delay; end if;
 			when "110" => a <= c.val after delay; f.pc <= c.val(f.pc'range) after delay; f.state <= S_FETCH after delay; -- TODO: Halt condition
 			when "111" => if jump = '1' then a <= c.val after delay; f.pc <= c.val(f.pc'range) after delay; f.state <= S_FETCH after delay; end if;
 			when others =>
