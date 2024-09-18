@@ -245,9 +245,9 @@ begin
 				c := character'val(to_integer(unsigned(rx_data)));
 				if (cfg.report_uart) then
 					if isgraph(c) then
-						report "BCPU -> UART CHAR: " & integer'image(to_integer(unsigned(rx_data))) & " CH: " & c;
+						report "CPU -> UART CHAR: " & integer'image(to_integer(unsigned(rx_data))) & " CH: " & c;
 					else
-						report "BCPU -> UART CHAR: " & integer'image(to_integer(unsigned(rx_data))) & " CH: <NON-GRAPHICAL>";
+						report "CPU -> UART CHAR: " & integer'image(to_integer(unsigned(rx_data))) & " CH: <NON-GRAPHICAL>";
 					end if;
 				end if;
 				write(oline, c);
@@ -320,10 +320,10 @@ begin
 			while good and not stop loop
 				read(iline, c, good);
 				if good then
-					report "UART -> BCPU CHAR: " & integer'image(character'pos(c)) & " CH: " & c;
+					report "UART -> CPU CHAR: " & integer'image(character'pos(c)) & " CH: " & c;
 				else
 					eoi := true;
-					report "UART -> BCPU EOL/EOI: " & integer'image(character'pos(CR)) & " CR";
+					report "UART -> CPU EOL/EOI: " & integer'image(character'pos(CR)) & " CR";
 					if en_non_io_tb then
 						write_byte(CR, io_re, stop, ihav, tx_data);
 					else
@@ -331,7 +331,7 @@ begin
 					end if;
 					wait for cfg.uart_char_delay;
 					if stop then exit; end if;
-					report "UART -> BCPU EOL/EOI: " & integer'image(character'pos(LF)) & " LF";
+					report "UART -> CPU EOL/EOI: " & integer'image(character'pos(LF)) & " LF";
 					c := LF;
 				end if;
 				if en_non_io_tb then

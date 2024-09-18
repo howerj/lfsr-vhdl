@@ -16,3 +16,4 @@ See <https://github.com/howerj/lfsr> for more information.
 The project currently works in simulation (it outputs the startup message
 "eForth 3.3" with a new line) and accepts input (try typing "words" when the
 simulation in GHDL is running).
+

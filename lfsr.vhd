@@ -14,11 +14,10 @@ entity lfsr is
 		asynchronous_reset: boolean    := true;   -- use asynchronous reset if true, synchronous if false
 		delay:              time       := 0 ns;   -- simulation only, gate delay
 		N:                  positive   := 16;     -- size the CPU
-		lfsr_length:        positive   := 8;      -- size of the LFSR polynomial
-		jspec:              std_ulogic_vector(4 downto 0) := "11100"; -- Jump specification
-		polynomial:         std_ulogic_vector(7 downto 0) := x"B8";
+		pc_length:          positive   := 8;      -- size of the LFSR polynomial, must be same length as `polynomial`
+		jspec:              std_ulogic_vector(4 downto 0) := "00111"; -- Jump specification
+		polynomial:         std_ulogic_vector(7 downto 0) := x"B8"; -- LFSR polynomial to use
 		non_blocking_input: boolean    := false;  -- if true, input will be -1 if there is no input
-		strict_io:          boolean    := true;   -- if true, I/O happens when `a` or `b` are -1, else when high bit set
 		pc_is_lfsr:         boolean    := true;   -- switch between using a counter and using a LFSR
 		debug:              natural    := 0);     -- debug level, 0 = off
 	port (
@@ -50,15 +49,15 @@ architecture rtl of lfsr is
 		S_OUT,    -- Output byte when ready
 		S_HALT);  -- Stop for it is the time of hammers
 
-	-- TODO: Customizable Program Counter, LFSR N-Bit vs Program Counter N-Bit
+	type alu_t is (A_AND, A_XOR, A_LSL1, A_LSR1, A_LOAD, A_STORE, A_JMP, A_JMPZ);
+
 	type registers_t is record
 		acc:    std_ulogic_vector(N - 1 downto 0); -- Multi purpose register
 		val:    std_ulogic_vector(N - 1 downto 0);
-		pc:     std_ulogic_vector(lfsr_length - 1 downto 0); -- Program Counter
+		pc:     std_ulogic_vector(pc_length - 1 downto 0); -- Program Counter
 		alu:    std_ulogic_vector(2 downto 0);
 		state:  state_t;    -- CPU State Register
 		stop:   std_ulogic; -- CPU Halt Flag
-		indirect: std_ulogic; 
 	end record;
 
 	constant registers_default: registers_t := (
@@ -67,15 +66,13 @@ architecture rtl of lfsr is
 		pc     => (others => '0'),
 		alu    => (others => '0'),
 		state  => S_RESET,
-		stop   => '0',
-		indirect => '0');
+		stop   => '0');
 
 	signal c, f: registers_t := registers_default; -- All state is captured in here
-	signal jump, zero, dop, feedback: std_ulogic := '0'; -- Transient CPU Flags
+	signal jump, zero, dop: std_ulogic := '0'; -- Transient CPU Flags
 	signal npc: std_ulogic_vector(7 downto 0) := (others => '0');
 
 	constant AZ: std_ulogic_vector(N - 1 downto 0) := (others => '0'); -- All Zeros
-	constant AO: std_ulogic_vector(N - 1 downto 0) := (others => '1'); -- All Ones
 
 	-- These constants are used to index into the jump specification, this allows
 	-- us to make alternative OISC machines by specifying a generic instead of making
@@ -109,8 +106,7 @@ architecture rtl of lfsr is
 			write(oline, uint(c.pc)  & ": ");
 			write(oline, state_t'image(c.state) & HT);
 			write(oline, int(c.acc)   & " ");
-			write(oline, uint(c.alu)   & " "); -- TODO: Print out ALU instruction name
-			--write(oline, c.indirect'image   & " ");
+			write(oline, alu_t'image(alu_t'val(to_integer(unsigned(c.alu))))   & " ");
 			if debug >= 3 and c.state /= f.state then
 				write(oline, state_t'image(c.state) & " => ");
 				write(oline, state_t'image(f.state));
@@ -127,33 +123,36 @@ begin
 	--   assert not (re = '1' and we = '1') severity warning;
 	--   assert not (io_re = '1' and io_we = '1') severity warning;
 
-	assert lfsr_length = polynomial'length severity failure;
+	assert pc_length = polynomial'length severity failure;
 	assert N >= 8 report "LFSR machine width too small, must be greater or equal to 8 bits" severity failure;
 
-	-- TODO: Optional counter / LFSR next state
 	pc_lfsr: if pc_is_lfsr generate
 		-- TODO: Generate from polynomial string / different LFSR types
-		--feedback <= c.pc(7) xor c.pc(5) xor c.pc(4) xor c.pc(3) after delay;
-		--npc <= feedback & c.pc(c.pc'high downto 1) after delay;
-		npc <= "0" & c.pc(c.pc'high downto 1) when c.pc(0) = '0' else (polynomial xor ("0" & c.pc(c.pc'high downto 1))) after delay;
+		--npc <= "0" & c.pc(c.pc'high downto 1) when c.pc(0) = '0' else (polynomial xor ("0" & c.pc(c.pc'high downto 1))) after delay;
 --		npc(7) <= c.pc(0) after delay;
 --		npc(6) <= c.pc(7) after delay;
---		npc(5) <= c.pc(6) after delay;
---		npc(4) <= c.pc(5) after delay;
---		npc(3) <= c.pc(4) after delay;
+--		npc(5) <= c.pc(6) xor c.pc(0) after delay;
+--		npc(4) <= c.pc(5) xor c.pc(0) after delay;
+--		npc(3) <= c.pc(4) xor c.pc(0) after delay;
 --		npc(2) <= c.pc(3) after delay;
 --		npc(1) <= c.pc(2) after delay;
 --		npc(0) <= c.pc(1) after delay;
+
+		gloop: for i in polynomial'range generate
+			ghi: if i = polynomial'high generate npc(i) <= c.pc(0) after delay; end generate;
+			gnormal: if i < polynomial'high generate
+				gshift: if polynomial(i) = '0' generate npc(i) <= c.pc(i + 1) after delay; end generate;
+				gxor: if polynomial(i) = '1' generate npc(i) <= c.pc(i + 1) xor c.pc(0) after delay; end generate;
+			end generate;
+		end generate;
 	end generate;
 
 	pc_counter: if not pc_is_lfsr generate
 		npc  <= std_ulogic_vector(unsigned(c.pc) + 1) after delay;
 	end generate;
 
-	--zero  <= '1' when jspec(JS_ZEN) = '1' and c.acc = AZ else '0' after delay;
-	--jump  <= '1' when (jspec(JS_NEN) = '1' and c.acc(c.acc'high) = jspec(JS_NC)) or zero = jspec(JS_ZC) else '0' after delay;
-	zero  <= '1' when c.acc = AZ else '0' after delay;
-	jump  <= zero after delay;
+	zero  <= '1' when jspec(JS_ZEN) = '1' and c.acc = AZ else '0' after delay;
+	jump  <= '1' when (jspec(JS_NEN) = '1' and c.acc(c.acc'high) = jspec(JS_NC)) or zero = jspec(JS_ZC) else '0' after delay;
 	o     <= c.acc after delay;
 	obyte <= c.acc(obyte'range) after delay;
 	re    <= not dop after delay;
@@ -181,7 +180,6 @@ begin
 		a <= (others => '0') after delay;
 		a(c.pc'range) <= c.pc after delay;
 		blocked <= '0' after delay;
-		--if c.pc(c.pc'high) = '1' then f.stop <= '1' after delay; end if;
 
 		case c.state is
 		when S_RESET => 
@@ -191,13 +189,11 @@ begin
 		when S_FETCH =>
 			f.state <= S_ALU after delay;
 			f.alu <= i(i'high - 1 downto i'high - 3) after delay;
-			f.indirect <= i(i'high) after delay;
 			f.val <= (others => '0') after delay;
 			f.val(i'high - 4 downto 0) <= i(i'high - 4 downto 0) after delay;
 			if pause = '1' then
 				f.state <= S_FETCH after delay;
 			elsif i(i'high) = '1' then
-				--a <= f.val after delay;
 				a <= (others => '0');
 				a(i'high - 4 downto 0) <= i(i'high - 4 downto 0) after delay;
 				f.state <= S_INDIRECT after delay;
@@ -207,8 +203,10 @@ begin
 			f.val <= i after delay;
 			f.state <= S_ALU after delay;
 		when S_ALU => -- TODO: Is this state needed? Optimize states
-			f.state <= S_NEXT after delay;
+			f.state <= S_FETCH after delay;
 			a(npc'range) <= npc after delay;
+			f.pc <= npc after delay;
+			-- TODO: Halt condition, even if simulation only
 			case c.alu is
 			when "000" => f.acc <= c.acc and c.val after delay;
 			when "001" => f.acc <= c.acc xor c.val after delay;
@@ -216,8 +214,8 @@ begin
 			when "011" => f.acc <= "0" & c.acc(c.acc'high downto 1) after delay;
 			when "100" => a <= c.val after delay; f.state <= S_LOAD after delay; if c.val(f.val'high) = '1' then f.state <= S_IN after delay; end if;
 			when "101" => a <= c.val after delay; f.state <= S_STORE after delay; if c.val(f.val'high) = '1' then f.state <= S_OUT after delay; end if;
-			when "110" => a <= c.val after delay; f.pc <= c.val(f.pc'range) after delay; f.state <= S_FETCH after delay; -- TODO: Halt condition
-			when "111" => if jump = '1' then a <= c.val after delay; f.pc <= c.val(f.pc'range) after delay; f.state <= S_FETCH after delay; end if;
+			when "110" => a <= c.val after delay; f.pc <= c.val(f.pc'range) after delay; f.state <= S_FETCH after delay; 
+			when "111" => if jump = jspec(JS_C) then a <= c.val after delay; f.pc <= c.val(f.pc'range) after delay; f.state <= S_FETCH after delay; end if;
 			when others =>
 			end case;
 		when S_STORE =>
@@ -230,8 +228,7 @@ begin
 			f.state <= S_NEXT after delay;
 		when S_NEXT =>
 			f.state <= S_FETCH after delay;
-			a(npc'range) <= npc after delay;
-			f.pc <= npc after delay;
+			a(c.pc'range) <= c.pc after delay;
 		when S_IN => -- TODO: Rework I/O to be memory mapped properly?
 			f.acc <= (others => '0') after delay;
 			f.acc (ibyte'range) <= ibyte after delay;
