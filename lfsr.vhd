@@ -127,17 +127,6 @@ begin
 	assert N >= 8 report "LFSR machine width too small, must be greater or equal to 8 bits" severity failure;
 
 	pc_lfsr: if pc_is_lfsr generate
-		-- TODO: Generate from polynomial string / different LFSR types
-		--npc <= "0" & c.pc(c.pc'high downto 1) when c.pc(0) = '0' else (polynomial xor ("0" & c.pc(c.pc'high downto 1))) after delay;
---		npc(7) <= c.pc(0) after delay;
---		npc(6) <= c.pc(7) after delay;
---		npc(5) <= c.pc(6) xor c.pc(0) after delay;
---		npc(4) <= c.pc(5) xor c.pc(0) after delay;
---		npc(3) <= c.pc(4) xor c.pc(0) after delay;
---		npc(2) <= c.pc(3) after delay;
---		npc(1) <= c.pc(2) after delay;
---		npc(0) <= c.pc(1) after delay;
-
 		gloop: for i in polynomial'range generate
 			ghi: if i = polynomial'high generate npc(i) <= c.pc(0) after delay; end generate;
 			gnormal: if i < polynomial'high generate
@@ -206,7 +195,6 @@ begin
 			f.state <= S_FETCH after delay;
 			a(npc'range) <= npc after delay;
 			f.pc <= npc after delay;
-			-- TODO: Halt condition, even if simulation only
 			case c.alu is
 			when "000" => f.acc <= c.acc and c.val after delay;
 			when "001" => f.acc <= c.acc xor c.val after delay;
@@ -215,6 +203,7 @@ begin
 			when "100" => a <= c.val after delay; f.state <= S_LOAD after delay; if c.val(f.val'high) = '1' then f.state <= S_IN after delay; end if;
 			when "101" => a <= c.val after delay; f.state <= S_STORE after delay; if c.val(f.val'high) = '1' then f.state <= S_OUT after delay; end if;
 			when "110" => a <= c.val after delay; f.pc <= c.val(f.pc'range) after delay; f.state <= S_FETCH after delay; 
+				--if c.val = c.pc then f.state <= S_HALT after delay; end if;
 			when "111" => if jump = jspec(JS_C) then a <= c.val after delay; f.pc <= c.val(f.pc'range) after delay; f.state <= S_FETCH after delay; end if;
 			when others =>
 			end case;
