@@ -6,7 +6,7 @@
 #include <assert.h>
 
 #define SZ (0x2000)
-#define POLY (0xB8)
+#define POLYNOMIAL (0xB8)
 #define VHDL_COMPATIBLE_DEBUG (1)
 
 typedef struct {
@@ -50,7 +50,7 @@ static int run(vm_t *v) {
 		const uint16_t ins = m[pc % SZ];
 		const uint16_t imm = ins & 0xFFF;
 		const uint16_t alu = (ins >> 12) & 0x7;
-		const uint8_t _pc = lfsr(pc, POLY);
+		const uint8_t _pc = lfsr(pc, POLYNOMIAL);
 		const uint16_t arg = ins & 0x8000 ? load(v, imm) : imm;
 		if (VHDL_COMPATIBLE_DEBUG) {
 			if (v->debug && fprintf(v->debug, "%d: a_%s %d\n", (unsigned)pc, names[alu], (unsigned)a) < 0) return -1;

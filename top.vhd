@@ -22,7 +22,8 @@ entity top is
 		baud:            positive        := 115200;
 		debug:           natural         := 0; -- will not synthesize if greater than zero (debug off = 0)
 		uart_use_cfg:    boolean         := false;
-		uart_fifo_depth: natural         := 0
+		uart_fifo_depth: natural         := 0;
+		halt_enable:     boolean         := false
 	);
 	port (
 		clk:         in std_ulogic;
@@ -85,7 +86,8 @@ begin
 		g => g,
 		file_name => file_name,
 		N => N,
-		debug => debug)
+		debug => debug,
+		halt_enable => halt_enable)
 	port map (
 		clk     => clk,
 		rst     => rst,

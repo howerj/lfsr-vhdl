@@ -19,6 +19,7 @@ entity lfsr is
 		polynomial:         std_ulogic_vector(7 downto 0) := x"B8"; -- LFSR polynomial to use
 		non_blocking_input: boolean    := false;  -- if true, input will be -1 if there is no input
 		pc_is_lfsr:         boolean    := true;   -- switch between using a counter and using a LFSR
+		halt_enable:        boolean    := false;   -- a jump to self causes `halted` to be raised
 		debug:              natural    := 0);     -- debug level, 0 = off
 	port (
 		clk:           in std_ulogic; -- Guess what this is?
@@ -38,7 +39,6 @@ end;
 
 architecture rtl of lfsr is
 	type state_t is (
-		S_RESET,  -- Starting State
 		S_FETCH, -- Load instruction
 		S_INDIRECT, -- Indirect through operand
 		S_ALU,    -- ALU instruction
@@ -46,27 +46,25 @@ architecture rtl of lfsr is
 		S_LOAD,   -- Load instruction
 		S_NEXT,   -- No Jump
 		S_IN,     -- Wait for input
-		S_OUT,    -- Output byte when ready
-		S_HALT);  -- Stop for it is the time of hammers
+		S_OUT    -- Output byte when ready
+	);
 
 	type alu_t is (A_AND, A_XOR, A_LSL1, A_LSR1, A_LOAD, A_STORE, A_JMP, A_JMPZ);
 
 	type registers_t is record
-		acc:    std_ulogic_vector(N - 1 downto 0); -- Multi purpose register
-		val:    std_ulogic_vector(N - 1 downto 0);
-		pc:     std_ulogic_vector(pc_length - 1 downto 0); -- Program Counter
-		alu:    std_ulogic_vector(2 downto 0);
-		state:  state_t;    -- CPU State Register
-		stop:   std_ulogic; -- CPU Halt Flag
+		acc:   std_ulogic_vector(N - 1 downto 0); -- Multi purpose register
+		val:   std_ulogic_vector(N - 1 downto 0); -- Value loaded or just the operand
+		pc:    std_ulogic_vector(pc_length - 1 downto 0); -- Program Counter
+		alu:   std_ulogic_vector(2 downto 0); -- Used to store instruction
+		state: state_t;    -- CPU State Register
 	end record;
 
 	constant registers_default: registers_t := (
-		acc    => (others => '0'),
-		val    => (others => '0'),
-		pc     => (others => '0'),
-		alu    => (others => '0'),
-		state  => S_RESET,
-		stop   => '0');
+		acc   => (others => '0'),
+		val   => (others => '0'),
+		pc    => (others => '0'),
+		alu   => (others => '0'),
+		state => S_FETCH);
 
 	signal c, f: registers_t := registers_default; -- All state is captured in here
 	signal jump, zero, dop: std_ulogic := '0'; -- Transient CPU Flags
@@ -148,7 +146,7 @@ begin
 	end generate;
 
 	pc_counter: if not pc_is_lfsr generate
-		npc  <= std_ulogic_vector(unsigned(c.pc) + 1) after delay;
+		npc <= std_ulogic_vector(unsigned(c.pc) + 1) after delay;
 	end generate;
 
 	zero  <= '1' when jspec(JS_ZEN) = '1' and c.acc = AZ else '0' after delay;
@@ -159,14 +157,25 @@ begin
 	we    <= dop after delay;
 
 	process (clk, rst) begin
+		-- This used to just set `c.state` into a reset state, which no longer
+		-- exists. This was removed to make the system as small as possible.
 		if rst = '1' and asynchronous_reset then
-			c.state <= S_RESET after delay;
+			c <= registers_default after delay;
 		elsif rising_edge(clk) then
 			c <= f after delay;
 			if rst = '1' and not asynchronous_reset then
-				c.state <= S_RESET after delay;
+				c <= registers_default after delay;
 			else
-				print_debug_info; -- TODO: Assert next state
+				print_debug_info;
+				if c.state = S_FETCH then 
+					assert (f.state = S_FETCH and pause = '1') or f.state = S_INDIRECT or f.state = S_ALU; 
+				end if;
+				if c.state = S_INDIRECT then assert f.state = S_ALU; end if;
+				if c.state = S_ALU then assert f.state /= S_INDIRECT; end if;
+				if c.state = S_LOAD then assert f.state = S_NEXT; end if;
+				if c.state = S_STORE then assert f.state = S_NEXT; end if;
+				if c.state = S_IN then assert f.state = S_IN or f.state = S_NEXT; end if;
+				if c.state = S_OUT then assert f.state = S_OUT or f.state = S_NEXT; end if;
 			end if;
 		end if;
 	end process;
@@ -182,10 +191,6 @@ begin
 		blocked <= '0' after delay;
 
 		case c.state is
-		when S_RESET => 
-			f <= registers_default after delay;
-			f.state <= S_FETCH after delay;
-			a <= (others => '0') after delay;
 		when S_FETCH =>
 			f.state <= S_ALU after delay;
 			f.alu <= i(i'high - 1 downto i'high - 3) after delay;
@@ -208,13 +213,13 @@ begin
 			f.pc <= npc after delay;
 			case c.alu is
 			when "000" => f.acc <= c.acc and c.val after delay;
-			when "001" => f.acc <= c.acc xor c.val after delay;
+			when "001" => f.acc <= c.acc xor c.val after delay; -- TODO: Perhaps xor should go first, all zeros would then be a NOP
 			when "010" => f.acc <= c.acc(c.acc'high - 1 downto 0) & "0" after delay;
 			when "011" => f.acc <= "0" & c.acc(c.acc'high downto 1) after delay;
 			when "100" => a <= c.val after delay; f.state <= S_LOAD after delay; if c.val(f.val'high) = '1' then f.state <= S_IN after delay; end if;
 			when "101" => a <= c.val after delay; f.state <= S_STORE after delay; if c.val(f.val'high) = '1' then f.state <= S_OUT after delay; end if;
 			when "110" => a <= c.val after delay; f.pc <= c.val(f.pc'range) after delay; f.state <= S_FETCH after delay; 
-				--if c.val = c.pc then f.state <= S_HALT after delay; end if;
+				if halt_enable and c.val(c.pc'range) = c.pc then halted <= '1' after delay; end if; -- `halted` is not present when synthesized, meaning this line is removed.
 			when "111" => if jump = jspec(JS_C) then a <= c.val after delay; f.pc <= c.val(f.pc'range) after delay; f.state <= S_FETCH after delay; end if;
 			when others =>
 			end case;
@@ -249,8 +254,6 @@ begin
 				io_we <= '1' after delay;
 				blocked <= '0' after delay;
 			end if;
-		when S_HALT =>
-			halted <= '1' after delay;
 		end case;
 	end process;
 end architecture;

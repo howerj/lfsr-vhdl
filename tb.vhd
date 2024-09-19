@@ -106,7 +106,8 @@ begin
 			g          => g,
 			file_name  => program,
 			N          => N,
-			debug      => debug)
+			debug      => debug,
+			halt_enable => true)
 		port map (
 			clk  => clk,
 			rst  => rst,
@@ -127,7 +128,8 @@ begin
 			file_name  => program,
 			N          => N,
 			baud       => baud,
-			debug      => debug)
+			debug      => debug,
+			halt_enable => true)
 		port map (
 			clk  => clk,
 --			rst  => rst,

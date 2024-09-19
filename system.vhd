@@ -28,7 +28,8 @@ entity system is
 		g:         common_generics := default_settings;
 		file_name: string          := "lfsr.hex";
 		N:         positive        := 16;
-		debug:     natural         := 0 -- will not synthesize if greater than zero (debug off = 0)
+		debug:     natural         := 0; -- will not synthesize if greater than zero (debug off = 0)
+		halt_enable: boolean       := false
 	);
 	port (
 		clk:           in std_ulogic;
@@ -90,7 +91,8 @@ begin
 			asynchronous_reset => g.asynchronous_reset,
 			delay              => g.delay,
 			N                  => N,
-			debug              => debug)
+			debug              => debug,
+			halt_enable        => halt_enable)
 		port map (
 			clk     => clk, 
 			rst     => rst,
