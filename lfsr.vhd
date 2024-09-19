@@ -212,14 +212,14 @@ begin
 			a(npc'range) <= npc after delay;
 			f.pc <= npc after delay;
 			case c.alu is
-			when "000" => f.acc <= c.acc and c.val after delay;
-			when "001" => f.acc <= c.acc xor c.val after delay; -- TODO: Perhaps xor should go first, all zeros would then be a NOP
+			when "000" => f.acc <= c.acc xor c.val after delay;
+			when "001" => f.acc <= c.acc and c.val after delay;
 			when "010" => f.acc <= c.acc(c.acc'high - 1 downto 0) & "0" after delay;
 			when "011" => f.acc <= "0" & c.acc(c.acc'high downto 1) after delay;
 			when "100" => a <= c.val after delay; f.state <= S_LOAD after delay; if c.val(f.val'high) = '1' then f.state <= S_IN after delay; end if;
 			when "101" => a <= c.val after delay; f.state <= S_STORE after delay; if c.val(f.val'high) = '1' then f.state <= S_OUT after delay; end if;
 			when "110" => a <= c.val after delay; f.pc <= c.val(f.pc'range) after delay; f.state <= S_FETCH after delay; 
-				if halt_enable and c.val(c.pc'range) = c.pc then halted <= '1' after delay; end if; -- `halted` is not present when synthesized, meaning this line is removed.
+				if halt_enable and c.val(c.pc'range) = c.pc then halted <= '1' after delay; end if;
 			when "111" => if jump = jspec(JS_C) then a <= c.val after delay; f.pc <= c.val(f.pc'range) after delay; f.state <= S_FETCH after delay; end if;
 			when others =>
 			end case;

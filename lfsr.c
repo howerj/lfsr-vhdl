@@ -45,7 +45,7 @@ static inline void store(vm_t *v, uint16_t addr, uint16_t val, long cycles) {
 static int run(vm_t *v) {
 	assert(v);
 	uint16_t pc = v->pc, a = v->pc, *m = v->m; /* load machine state */
-	static const char *names[] = { "and", "xor", "lsl1", "lsr1", "load", "store", "jmp", "jmpz", };
+	static const char *names[] = { "xor", "and", "lsl1", "lsr1", "load", "store", "jmp", "jmpz", };
 	for (long cycles = 0;;cycles++) { /* An `ADD` instruction things up greatly, `OR` not so much */
 		const uint16_t ins = m[pc % SZ];
 		const uint16_t imm = ins & 0xFFF;
@@ -59,8 +59,8 @@ static int run(vm_t *v) {
 					(unsigned)pc, ins & 0x8000 ? 'i' : ' ', names[alu], (unsigned)ins, (unsigned)a, cycles) < 0) return -1;
 		}
 		switch (alu) {
-		case 0: a &= arg; pc = _pc; break;
-		case 1: a ^= arg; pc = _pc; break;
+		case 0: a ^= arg; pc = _pc; break;
+		case 1: a &= arg; pc = _pc; break;
 		case 2: a <<= 1; pc = _pc; break;
 		case 3: a >>= 1; pc = _pc; break;
 		case 4: a = load(v, arg); pc = _pc; break;
