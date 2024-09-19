@@ -18,7 +18,6 @@ set names {
 	top.tb.gn.uut.system.cpu.c.acc[15:0]
 	top.tb.gn.uut.system.cpu.c.arg[15:0]
 	top.tb.gn.uut.system.cpu.c.alu[2:0]
-	top.tb.gn.uut.system.cpu.c.indirect
 	top.tb.gn.uut.system.cpu.c.stop
 	top.tb.gn.uut.system.cpu.npc[7:0]
 	top.tb.gn.uut.system.cpu.re
@@ -29,23 +28,22 @@ set names {
 	top.tb.gn.uut.system.cpu.blocked
 	top.tb.gn.uut.obyte[7:0]
 	top.tb.gn.uut.ibyte[7:0]
-	top.tb.gt.uut.system.cpu.a[15:0]
-	top.tb.gt.uut.system.cpu.o[15:0]
-	top.tb.gt.uut.system.cpu.i[15:0]
-	top.tb.gt.uut.system.cpu.c.state
-	top.tb.gt.uut.system.cpu.c.pc[7:0]
-	top.tb.gt.uut.system.cpu.c.acc[15:0]
-	top.tb.gt.uut.system.cpu.c.val[15:0]
-	top.tb.gt.uut.system.cpu.c.alu[2:0]
-	top.tb.gt.uut.system.cpu.c.indirect
-	top.tb.gt.uut.system.cpu.c.stop
-	top.tb.gt.uut.system.cpu.npc[7:0]
-	top.tb.gt.uut.system.cpu.re
-	top.tb.gt.uut.system.cpu.we
-	top.tb.gt.uut.system.cpu.io_re
-	top.tb.gt.uut.system.cpu.io_we
-	top.tb.gt.uut.system.cpu.halted
-	top.tb.gt.uut.system.cpu.blocked
+	top.tb.gt.uut.cpu.a[15:0]
+	top.tb.gt.uut.cpu.o[15:0]
+	top.tb.gt.uut.cpu.i[15:0]
+	top.tb.gt.uut.cpu.c.state
+	top.tb.gt.uut.cpu.c.pc[7:0]
+	top.tb.gt.uut.cpu.c.acc[15:0]
+	top.tb.gt.uut.cpu.c.val[15:0]
+	top.tb.gt.uut.cpu.c.alu[2:0]
+	top.tb.gt.uut.cpu.c.stop
+	top.tb.gt.uut.cpu.npc[7:0]
+	top.tb.gt.uut.cpu.re
+	top.tb.gt.uut.cpu.we
+	top.tb.gt.uut.cpu.io_re
+	top.tb.gt.uut.cpu.io_we
+	top.tb.gt.uut.cpu.halted
+	top.tb.gt.uut.cpu.blocked
 	top.tb.gt.uut.obyte[7:0]
 	top.tb.gt.uut.ibyte[7:0]
 	top.tb.tx
