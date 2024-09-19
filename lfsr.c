@@ -7,6 +7,7 @@
 
 #define SZ (0x2000)
 #define POLY (0xB8)
+#define VHDL_COMPATIBLE_DEBUG (1)
 
 typedef struct {
 	uint16_t m[SZ], pc, a, first;
@@ -30,7 +31,7 @@ static inline uint16_t load(vm_t *v, uint16_t addr) {
 static inline void store(vm_t *v, uint16_t addr, uint16_t val, long cycles) {
 	assert(v);
 	if (addr & 0x8000) {
-		if (!v->first) {
+		if (!v->first) { /* Useful to know when simulating the VHDL test-bench */
 			v->first = 1;
 			if (v->debug)
 				(void)fprintf(v->debug, "Cycles until first output: %ld\n", cycles);
@@ -44,15 +45,19 @@ static inline void store(vm_t *v, uint16_t addr, uint16_t val, long cycles) {
 static int run(vm_t *v) {
 	assert(v);
 	uint16_t pc = v->pc, a = v->pc, *m = v->m; /* load machine state */
-	static const char *names[] = { "AND  ", "XOR  ", "LSL1 ", "LSR1 ", "LOAD ", "STORE", "JMP  ", "JMPZ ", };
+	static const char *names[] = { "and", "xor", "lsl1", "lsr1", "load", "store", "jmp", "jmpz", };
 	for (long cycles = 0;;cycles++) { /* An `ADD` instruction things up greatly, `OR` not so much */
 		const uint16_t ins = m[pc % SZ];
 		const uint16_t imm = ins & 0xFFF;
 		const uint16_t alu = (ins >> 12) & 0x7;
 		const uint8_t _pc = lfsr(pc, POLY);
 		const uint16_t arg = ins & 0x8000 ? load(v, imm) : imm;
-		if (v->debug && fprintf(v->debug, "%04x: %c %s %04X %04X\t%ld\n", 
-				(unsigned)pc, ins & 0x8000 ? 'i' : ' ', names[alu], (unsigned)ins, (unsigned)a, cycles) < 0) return -1;
+		if (VHDL_COMPATIBLE_DEBUG) {
+			if (v->debug && fprintf(v->debug, "%d: a_%s %d\n", (unsigned)pc, names[alu], (unsigned)a) < 0) return -1;
+		} else { /* The VHDL test bench outputs the same format to stdio if a debugging generic is enabled */
+			if (v->debug && fprintf(v->debug, "%04x: %c %5s %04X %04X\t%ld\n", 
+					(unsigned)pc, ins & 0x8000 ? 'i' : ' ', names[alu], (unsigned)ins, (unsigned)a, cycles) < 0) return -1;
+		}
 		switch (alu) {
 		case 0: a &= arg; pc = _pc; break;
 		case 1: a ^= arg; pc = _pc; break;

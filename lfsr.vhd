@@ -87,9 +87,6 @@ architecture rtl of lfsr is
 	-- off for the body of this function, it does make debugging much easier
 	-- though, we will be able to see which instructions are executed and do so
 	-- by name.
-	--
-	-- TODO: Print out the same debug information as `lfsr.c` so they can be
-	-- compared directly
 	procedure print_debug_info is
 		variable oline: line;
 		function int(slv: in std_ulogic_vector) return string is
@@ -102,12 +99,26 @@ architecture rtl of lfsr is
 		end function;
 	begin
 		-- synthesis translate_off
-		if debug >= 2 then
+		-- When `debug = 2` we can produce output that should be the same as our
+		-- C simulator when it has debugging turned on (modulo some extra messages
+		-- the VHDL test bench produces which should be obvious in a diff).
+		if debug = 2 then
+			if c.state = S_ALU then
+				write(oline, uint(c.pc) & ": ");
+				write(oline, alu_t'image(alu_t'val(to_integer(unsigned(c.alu)))) & " ");
+				write(oline, uint(c.acc));
+				writeline(OUTPUT, oline);
+			end if;
+		end if;
+		-- This debug mode shows the registers and their intermediate values when
+		-- different states are entered, which is not possible (or needed) for the C 
+		-- simulator.
+		if debug >= 3 then
 			write(oline, uint(c.pc)  & ": ");
 			write(oline, state_t'image(c.state) & HT);
 			write(oline, int(c.acc)   & " ");
 			write(oline, alu_t'image(alu_t'val(to_integer(unsigned(c.alu))))   & " ");
-			if debug >= 3 and c.state /= f.state then
+			if debug >= 4 and c.state /= f.state then
 				write(oline, state_t'image(c.state) & " => ");
 				write(oline, state_t'image(f.state));
 			end if;
@@ -127,11 +138,11 @@ begin
 	assert N >= 8 report "LFSR machine width too small, must be greater or equal to 8 bits" severity failure;
 
 	pc_lfsr: if pc_is_lfsr generate
-		gloop: for i in polynomial'range generate
-			ghi: if i = polynomial'high generate npc(i) <= c.pc(0) after delay; end generate;
-			gnormal: if i < polynomial'high generate
-				gshift: if polynomial(i) = '0' generate npc(i) <= c.pc(i + 1) after delay; end generate;
-				gxor: if polynomial(i) = '1' generate npc(i) <= c.pc(i + 1) xor c.pc(0) after delay; end generate;
+		gloop: for g in polynomial'range generate
+			ghi: if g = polynomial'high generate npc(g) <= c.pc(0) after delay; end generate;
+			gnormal: if g < polynomial'high generate
+				gshift: if polynomial(g) = '0' generate npc(g) <= c.pc(g + 1) after delay; end generate;
+				gxor: if polynomial(g) = '1' generate npc(g) <= c.pc(g + 1) xor c.pc(0) after delay; end generate;
 			end generate;
 		end generate;
 	end generate;
