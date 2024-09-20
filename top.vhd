@@ -2,7 +2,7 @@
 -- Author:      Richard James Howe
 -- Repository:  https://github.com/howerj/lfsr-vhdl
 -- Email:       howe.r.j.89@gmail.com
--- License:     MIT
+-- License:     0BSD / Public Domain
 -- Description: Top level entity; LFSR CPU
 --
 -- This module brings together the LFSR CPU/Memory subsystem with

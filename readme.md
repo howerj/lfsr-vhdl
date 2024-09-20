@@ -85,6 +85,48 @@ To build for an FPGA you will need `Xilinx ISE 14.7`:
 The system has not been tested on an FPGA at the moment. If you have any luck,
 let me know.
 
+# Tracing
+
+Edit `tb.cfg` and ensure that the number of clocks to run for is over `90000000` (or equal
+to), and that we are running in interactive mode, the following configuration
+file should work:
+
+	Clocks.. # Number of clock cycles to run for
+	90000000
+	Forever. # If greater than zero run forever
+	0
+	Interact # Is this session interactive?
+	2
+	InWaitMs # Time to wait before getting user input
+	10
+	UartRep. # UART reporting level, if non zero `report` UART chars
+	1
+	LogFor.. # Extra debug logging for this many cycles
+	100
+	1Line... # Exit after getting one line of input if non zero
+	1
+	UChDelay # Delay (ms) between sending UART characters
+	3
+	CRLF.EOF # Line ending CRLF (1) or LF (0)?
+	0
+
+Then run the command:
+
+	echo "bye" | make simulation DEBUG=2 > vhdl.txt
+
+And then:
+
+	echo "bye" | DEBUG=1 ./lfsr lfsr.hex 2> c.txt
+
+And compare with:
+
+	vimdiff vhdl.txt c.txt
+
+You will notice differences, however they should be minor, obvious, and mostly
+related to VHDL report messages. The instructions executed should be identical
+so long as the input is identical, to make sure this is the case the line
+endings also need to be made to be identical for both inputs.
+
 # References
 
 * <https://github.com/howerj/lfsr>

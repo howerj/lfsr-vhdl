@@ -2,7 +2,7 @@
 -- Author:      Richard James Howe
 -- Repository:  https://github.com/howerj/lfsr-vhdl
 -- Email:       howe.r.j.89@gmail.com
--- License:     MIT
+-- License:     0BSD / Public Domain
 --
 -- Description: Utility module, mostly taken from another project
 -- of mine, <https://github.com/howerj/forth-cpu>.

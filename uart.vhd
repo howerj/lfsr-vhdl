@@ -5,10 +5,10 @@
 --
 -- Taken from <https://github.com/nandland/UART>, commit
 -- 4ae04682b0e59f4b9d93a4f99b06990e5bcb5cc2, it is MIT licensed as are
--- the changes, and  is smaller (and less featureful) than the UART I made at
+-- the changes, and is smaller (and less featureful) than the UART I made at
 -- <https://github.com/howerj/forth-cpu>. There are significant changes,
--- which make the UART easier to use and integrate. The original copyright
--- notice is:
+-- which make the UART easier to use and integrate (for me). The original 
+-- copyright notice is:
 --
 -- -------------------------------------------------------------------------------
 --

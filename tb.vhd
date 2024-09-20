@@ -2,7 +2,7 @@
 -- Author:      Richard James Howe
 -- Repository:  https://github.com/howerj/lfsr-vhdl
 -- Email:       howe.r.j.89@gmail.com
--- License:     MIT
+-- License:     0BSD / Public Domain
 -- Description: Test bench for top level entity
 
 library ieee, work, std;
@@ -20,8 +20,8 @@ entity tb is
 	--
 	generic (
 		clock_frequency:    positive := 100_000_000;
-		asynchronous_reset: boolean := false;
-		delay:              time := 0 ns;
+		asynchronous_reset: boolean  := false;
+		delay:              time     := 0 ns;
 		debug:              integer  := 0;
 		baud:               positive := 115200;
 		en_uart_tbs:        boolean  := false; -- Generate UART test benches as well?
@@ -64,6 +64,7 @@ architecture testing of tb is
 		report_number:     natural;
 		input_single_line: boolean;
 		uart_char_delay:   time;
+		crlf:              boolean;
 	end record;
 
 	function set_configuration_items(ci: configuration_items) return configurable_items is
@@ -77,10 +78,11 @@ architecture testing of tb is
 		r.report_number     := ci(5).value;
 		r.input_single_line := ci(6).value > 0;
 		r.uart_char_delay   := ci(7).value * 1 ms;
+		r.crlf              := ci(8).value > 0;
 		return r;
 	end function;
 
-	constant configuration_default: configuration_items(0 to 7) := (
+	constant configuration_default: configuration_items(0 to 8) := (
 		(name => "Clocks..", value => 1000),
 		(name => "Forever.", value => 0),
 		(name => "Interact", value => 0),
@@ -88,7 +90,8 @@ architecture testing of tb is
 		(name => "UartRep.", value => 0),
 		(name => "LogFor..", value => 256),
 		(name => "1Line...", value => 1),
-		(name => "UChDelay", value => 6)
+		(name => "UChDelay", value => 6),
+		(name => "CRLF.EOF", value => 0)
 	);
 
 	-- Test bench configurable options --
@@ -254,7 +257,7 @@ begin
 				end if;
 				write(oline, c);
 				have_char := true;
-				if rx_data = x"0d" then
+				if rx_data = x"0D" then -- x"0A"?
 					writeline(output, oline);
 					have_char := false;
 				end if;
@@ -325,14 +328,16 @@ begin
 					report "UART -> CPU CHAR: " & integer'image(character'pos(c)) & " CH: " & c;
 				else
 					eoi := true;
-					report "UART -> CPU EOL/EOI: " & integer'image(character'pos(CR)) & " CR";
-					if en_non_io_tb then
-						write_byte(CR, io_re, stop, ihav, tx_data);
-					else
-						uart_write_byte(baud, std_ulogic_vector(to_unsigned(character'pos(CR), tx_data'length)), tx);
+					if cfg.crlf then
+						report "UART -> CPU EOL/EOI: " & integer'image(character'pos(CR)) & " CR";
+						if en_non_io_tb then
+							write_byte(CR, io_re, stop, ihav, tx_data);
+						else
+							uart_write_byte(baud, std_ulogic_vector(to_unsigned(character'pos(CR), tx_data'length)), tx);
+						end if;
+						wait for cfg.uart_char_delay;
+						if stop then exit; end if;
 					end if;
-					wait for cfg.uart_char_delay;
-					if stop then exit; end if;
 					report "UART -> CPU EOL/EOI: " & integer'image(character'pos(LF)) & " LF";
 					c := LF;
 				end if;

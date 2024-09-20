@@ -1,8 +1,49 @@
 -- File:        lfsr.vhd
 -- Author:      Richard James Howe
 -- Repository:  https://github.com/howerj/lfsr-vhdl
--- License:     MIT / Public Domain
--- Description: CPU with LFSR as PC
+-- License:     0BSD / Public Domain
+-- Description: 16-bit Accumulator CPU with LFSR as PC
+--
+-- This file contains a configurable CPU core that uses a Linear Feedback
+-- Shift Register (LFSR) as a Program Counter (PC) instead of a normal adder to 
+-- advance to the next state. Historically this was very rarely used to save on 
+-- the number of gates used to implement a PC as a LFSR requires fewer gate than
+-- an adder. It is actually possible to use an adder, selectable via a generic,
+-- instead if you so wish.
+--
+-- Although this CPU is quite odd, it is capable of running a full blown
+-- programming language called Forth. The image to do this should be part of
+-- the project, but you will not find any "Forth" in this file. The tool-chain
+-- to build the image is available at <https://github.com/howerj/lfsr>.
+--
+-- In the default configuration this 16-bit Accumulator CPU only has an
+-- 8-bit Program Counter, which means it can only address 256 16-bit values.
+-- This is enough to implement a Virtual Machine which can address the full
+-- range a 16-bit value allows (65536 cells).
+--
+-- The CPU is a proof-of-concept, although when laying gates out by hand
+-- there is a saving in numbers of gates (and also a potential speed boost
+-- compared to a normal adder) due to the way the primitives on an FPGA are
+-- implemented there is most likely no saving at all (the building blocks,
+-- Slices and Configurable Logic Blocks on Xilinx devices) contain logic
+-- to help implement the carry logic needed by an adder efficiently.
+--
+-- The CPU starts executing at address 0, which is a special value for a
+-- XOR based LFSR in that it is a lockup state from which there is no escape.
+-- This can be addressed by having the first instruction as a JUMP.
+--
+-- There are 8 instructions; XOR, AND, Left Shift by 1, Right Shift by 1,
+-- Load, Store, Jump and Jump-on-Zero. Each instruction has a 12-bit operand,
+-- and if the high bit is set that operand is loaded from memory instead of
+-- being used directly by the instruction (thus turning a load into an indirect
+-- load, a jump into an indirect jump, or loading a full 16-bit value to be
+-- AND'ed with the accumulator).
+--
+-- There are no interrupts.
+--
+-- If you find a use for this CPU, please let me know, it has been made just
+-- for fun and I doubt it has practical applications.
+--
 
 library ieee, work, std;
 use ieee.std_logic_1164.all;
@@ -14,12 +55,13 @@ entity lfsr is
 		asynchronous_reset: boolean    := true;   -- use asynchronous reset if true, synchronous if false
 		delay:              time       := 0 ns;   -- simulation only, gate delay
 		N:                  positive   := 16;     -- size the CPU
-		pc_length:          positive   := 8;      -- size of the LFSR polynomial, must be same length as `polynomial`
+		pc_length:          positive   := 8;      -- size of the LFSR polynomial
 		jspec:              std_ulogic_vector(4 downto 0) := "00111"; -- Jump specification
-		polynomial:         std_ulogic_vector(7 downto 0) := x"B8"; -- LFSR polynomial to use
+		polynomial:         std_ulogic_vector(15 downto 0) := x"00B8"; -- LFSR polynomial to use
 		non_blocking_input: boolean    := false;  -- if true, input will be -1 if there is no input
 		pc_is_lfsr:         boolean    := true;   -- switch between using a counter and using a LFSR
-		halt_enable:        boolean    := false;   -- a jump to self causes `halted` to be raised
+		halt_enable:        boolean    := false;  -- a jump to self causes `halted` to be raised
+		multiple_io:        boolean    := false;  -- enable address output on I/O states
 		debug:              natural    := 0);     -- debug level, 0 = off
 	port (
 		clk:           in std_ulogic; -- Guess what this is?
@@ -28,10 +70,10 @@ entity lfsr is
 		i:             in std_ulogic_vector(N - 1 downto 0); -- Memory access; Input
 		a:            out std_ulogic_vector(N - 1 downto 0); -- Memory access; Address
 		we, re:       out std_ulogic; -- Write and read enable for memory only
-		obyte:        out std_ulogic_vector(7 downto 0); -- UART output byte
-		ibyte:         in std_ulogic_vector(7 downto 0); -- UART input byte
+		obyte:        out std_ulogic_vector(7 downto 0); -- Output byte
+		ibyte:         in std_ulogic_vector(7 downto 0); -- Input byte
 		obsy, ihav:    in std_ulogic; -- Output busy / Have input
-		io_we, io_re: out std_ulogic; -- Write and read enable for I/O (UART)
+		io_we, io_re: out std_ulogic; -- Write and read enable for I/O
 		pause:         in std_ulogic; -- pause the CPU in the `S_FETCH` state
 		blocked:      out std_ulogic; -- is the CPU paused, or blocking on I/O?
 		halted:       out std_ulogic); -- Is the system halted?
@@ -39,23 +81,23 @@ end;
 
 architecture rtl of lfsr is
 	type state_t is (
-		S_FETCH, -- Load instruction
+		S_FETCH,    -- Load instruction
 		S_INDIRECT, -- Indirect through operand
-		S_ALU,    -- ALU instruction
-		S_STORE,  -- Store instruction
-		S_LOAD,   -- Load instruction
-		S_NEXT,   -- No Jump
-		S_IN,     -- Wait for input
-		S_OUT    -- Output byte when ready
+		S_ALU,      -- ALU instruction
+		S_STORE,    -- Store instruction
+		S_LOAD,     -- Load instruction
+		S_NEXT,     -- No Jump, load next PC
+		S_IN,       -- Wait for input
+		S_OUT       -- Output byte when ready
 	);
 
-	type alu_t is (A_AND, A_XOR, A_LSL1, A_LSR1, A_LOAD, A_STORE, A_JMP, A_JMPZ);
+	type alu_t is (A_XOR, A_AND, A_LSL1, A_LSR1, A_LOAD, A_STORE, A_JMP, A_JMPZ);
 
 	type registers_t is record
 		acc:   std_ulogic_vector(N - 1 downto 0); -- Multi purpose register
 		val:   std_ulogic_vector(N - 1 downto 0); -- Value loaded or just the operand
 		pc:    std_ulogic_vector(pc_length - 1 downto 0); -- Program Counter
-		alu:   std_ulogic_vector(2 downto 0); -- Used to store instruction
+		alu:   alu_t; -- Used to store instruction
 		state: state_t;    -- CPU State Register
 	end record;
 
@@ -63,12 +105,12 @@ architecture rtl of lfsr is
 		acc   => (others => '0'),
 		val   => (others => '0'),
 		pc    => (others => '0'),
-		alu   => (others => '0'),
+		alu   => A_XOR,
 		state => S_FETCH);
 
 	signal c, f: registers_t := registers_default; -- All state is captured in here
 	signal jump, zero, dop: std_ulogic := '0'; -- Transient CPU Flags
-	signal npc: std_ulogic_vector(7 downto 0) := (others => '0');
+	signal npc: std_ulogic_vector(pc_length - 1 downto 0) := (others => '0'); -- Potential next PC value
 
 	constant AZ: std_ulogic_vector(N - 1 downto 0) := (others => '0'); -- All Zeros
 
@@ -82,9 +124,9 @@ architecture rtl of lfsr is
 	constant JS_NC:  integer := 4; -- '1' = Jump on Negative, '0' = Jump on 
 
 	-- Obviously this does not synthesize, which is why synthesis is turned
-	-- off for the body of this function, it does make debugging much easier
-	-- though, we will be able to see which instructions are executed and do so
-	-- by name.
+	-- off for the body of this procedure, it does make debugging much easier
+	-- when running a test-bench as we will be able to see which instructions are 
+	-- executed and do so by name.
 	procedure print_debug_info is
 		variable oline: line;
 		function int(slv: in std_ulogic_vector) return string is
@@ -103,19 +145,19 @@ architecture rtl of lfsr is
 		if debug = 2 then
 			if c.state = S_ALU then
 				write(oline, uint(c.pc) & ": ");
-				write(oline, alu_t'image(alu_t'val(to_integer(unsigned(c.alu)))) & " ");
+				write(oline, alu_t'image(c.alu) & " ");
 				write(oline, uint(c.acc));
 				writeline(OUTPUT, oline);
 			end if;
 		end if;
 		-- This debug mode shows the registers and their intermediate values when
 		-- different states are entered, which is not possible (or needed) for the C 
-		-- simulator.
+		-- simulator. State transitions can also be shown explicitly when they occur.
 		if debug >= 3 then
 			write(oline, uint(c.pc)  & ": ");
 			write(oline, state_t'image(c.state) & HT);
 			write(oline, int(c.acc)   & " ");
-			write(oline, alu_t'image(alu_t'val(to_integer(unsigned(c.alu))))   & " ");
+			write(oline, alu_t'image(c.alu)   & " ");
 			if debug >= 4 and c.state /= f.state then
 				write(oline, state_t'image(c.state) & " => ");
 				write(oline, state_t'image(f.state));
@@ -132,20 +174,19 @@ begin
 	--   assert not (re = '1' and we = '1') severity warning;
 	--   assert not (io_re = '1' and io_we = '1') severity warning;
 
-	assert pc_length = polynomial'length severity failure;
 	assert N >= 8 report "LFSR machine width too small, must be greater or equal to 8 bits" severity failure;
 
-	pc_lfsr: if pc_is_lfsr generate
-		gloop: for g in polynomial'range generate
-			ghi: if g = polynomial'high generate npc(g) <= c.pc(0) after delay; end generate;
-			gnormal: if g < polynomial'high generate
+	pc_lfsr: if pc_is_lfsr generate -- Super RAD Mode
+		gloop: for g in pc_length - 1 downto 0 generate
+			ghi: if g = pc_length - 1 generate npc(g) <= c.pc(0) after delay; end generate;
+			gnormal: if g < (pc_length - 1) generate
 				gshift: if polynomial(g) = '0' generate npc(g) <= c.pc(g + 1) after delay; end generate;
 				gxor: if polynomial(g) = '1' generate npc(g) <= c.pc(g + 1) xor c.pc(0) after delay; end generate;
 			end generate;
 		end generate;
 	end generate;
 
-	pc_counter: if not pc_is_lfsr generate
+	pc_counter: if not pc_is_lfsr generate -- Boring mode
 		npc <= std_ulogic_vector(unsigned(c.pc) + 1) after delay;
 	end generate;
 
@@ -158,7 +199,8 @@ begin
 
 	process (clk, rst) begin
 		-- This used to just set `c.state` into a reset state, which no longer
-		-- exists. This was removed to make the system as small as possible.
+		-- exists, instead of setting all registers to their default values. 
+		-- This was removed to make the system as small as possible. 
 		if rst = '1' and asynchronous_reset then
 			c <= registers_default after delay;
 		elsif rising_edge(clk) then
@@ -193,7 +235,7 @@ begin
 		case c.state is
 		when S_FETCH =>
 			f.state <= S_ALU after delay;
-			f.alu <= i(i'high - 1 downto i'high - 3) after delay;
+			f.alu <= alu_t'val(to_integer(unsigned(i(i'high - 1 downto i'high - 3)))) after delay;
 			f.val <= (others => '0') after delay;
 			f.val(i'high - 4 downto 0) <= i(i'high - 4 downto 0) after delay;
 			if pause = '1' then
@@ -207,21 +249,20 @@ begin
 			a <= c.val after delay;
 			f.val <= i after delay;
 			f.state <= S_ALU after delay;
-		when S_ALU => -- TODO: Is this state needed? Optimize states
+		when S_ALU => -- N.B. We might get away with removing this state if we turn this into its own logic block
 			f.state <= S_FETCH after delay;
 			a(npc'range) <= npc after delay;
 			f.pc <= npc after delay;
 			case c.alu is
-			when "000" => f.acc <= c.acc xor c.val after delay;
-			when "001" => f.acc <= c.acc and c.val after delay;
-			when "010" => f.acc <= c.acc(c.acc'high - 1 downto 0) & "0" after delay;
-			when "011" => f.acc <= "0" & c.acc(c.acc'high downto 1) after delay;
-			when "100" => a <= c.val after delay; f.state <= S_LOAD after delay; if c.val(f.val'high) = '1' then f.state <= S_IN after delay; end if;
-			when "101" => a <= c.val after delay; f.state <= S_STORE after delay; if c.val(f.val'high) = '1' then f.state <= S_OUT after delay; end if;
-			when "110" => a <= c.val after delay; f.pc <= c.val(f.pc'range) after delay; f.state <= S_FETCH after delay; 
+			when A_XOR => f.acc <= c.acc xor c.val after delay;
+			when A_AND => f.acc <= c.acc and c.val after delay;
+			when A_LSL1 => f.acc <= c.acc(c.acc'high - 1 downto 0) & "0" after delay;
+			when A_LSR1 => f.acc <= "0" & c.acc(c.acc'high downto 1) after delay;
+			when A_LOAD => a <= c.val after delay; f.state <= S_LOAD after delay; if c.val(f.val'high) = '1' then f.state <= S_IN after delay; end if;
+			when A_STORE => a <= c.val after delay; f.state <= S_STORE after delay; if c.val(f.val'high) = '1' then f.state <= S_OUT after delay; end if;
+			when A_JMP => a <= c.val after delay; f.pc <= c.val(f.pc'range) after delay; f.state <= S_FETCH after delay; 
 				if halt_enable and c.val(c.pc'range) = c.pc then halted <= '1' after delay; end if;
-			when "111" => if jump = jspec(JS_C) then a <= c.val after delay; f.pc <= c.val(f.pc'range) after delay; f.state <= S_FETCH after delay; end if;
-			when others =>
+			when A_JMPZ => if jump = jspec(JS_C) then a <= c.val after delay; f.pc <= c.val(f.pc'range) after delay; f.state <= S_FETCH after delay; end if;
 			end case;
 		when S_STORE =>
 			a <= c.val after delay;
@@ -234,7 +275,16 @@ begin
 		when S_NEXT =>
 			f.state <= S_FETCH after delay;
 			a(c.pc'range) <= c.pc after delay;
-		when S_IN => -- TODO: Rework I/O to be memory mapped properly?
+		-- The I/O could be reworked, it does not need to be part of the
+		-- the CPU, it just makes implemented a UART driven eForth interface
+		-- easier as it behaves much like the C VM. The rework would entail
+		-- is removing the `S_IN` and `S_OUT` states along with associated
+		-- signals and handling I/O with proper memory mapping with `S_LOAD`
+		-- and `S_STORE`. This would require software changes as well.
+		when S_IN => 
+			if multiple_io then
+				a <= c.val after delay; -- Used so an external I/O system can determine what we are reading from (if needed)
+			end if;
 			f.acc <= (others => '0') after delay;
 			f.acc (ibyte'range) <= ibyte after delay;
 			blocked <= '1' after delay;
@@ -248,6 +298,9 @@ begin
 				blocked <= '0' after delay;
 			end if;
 		when S_OUT =>
+			if multiple_io then
+				a <= c.val after delay; -- Used so an external I/O system can determine what we are writing to (if needed)
+			end if;
 			blocked <= '1' after delay;
 			if obsy = '0' then
 				f.state <= S_NEXT after delay;
