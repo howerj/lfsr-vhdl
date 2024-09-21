@@ -209,8 +209,8 @@ Graphviz, this can be done online, see <https://dreampuf.github.io/GraphvizOnlin
 		next -> fetch;
 	}
 
-Alternatively, here is a veritable feast of PNG file for both your lovely eye balls
-to take in an gaze upon, to to just look at, whatever:
+Alternatively, here is a veritable feast of a PNG file for both your lovely eye balls
+to take in an gaze upon, or to just look at, whatever:
 
 ![CPU State Machine](lfsr-sm.png)
 

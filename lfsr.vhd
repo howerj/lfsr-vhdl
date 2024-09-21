@@ -252,12 +252,12 @@ begin
 			f.state <= S_ALU after delay;
 			f.alu <= alu_t'val(to_integer(unsigned(alu))) after delay;
 			f.val <= (others => '0') after delay;
-			f.val(i'high - 4 downto 0) <= operand after delay;
+			f.val(operand'range) <= operand after delay;
 			if pause = '1' then
 				f.state <= S_FETCH after delay;
 			elsif indirect = '1' then
 				a <= (others => '0');
-				a(i'high - 4 downto 0) <= operand after delay;
+				a(operand'range) <= operand after delay;
 				f.state <= S_INDIRECT after delay;
 			end if;
 		when S_INDIRECT =>
@@ -301,7 +301,7 @@ begin
 				a <= c.val after delay; -- Used so an external I/O system can determine what we are reading from (if needed)
 			end if;
 			f.acc <= (others => '0') after delay;
-			f.acc (ibyte'range) <= ibyte after delay;
+			f.acc(ibyte'range) <= ibyte after delay;
 			blocked <= '1' after delay;
 			if ihav = '1' then
 				f.state <= S_NEXT after delay;
