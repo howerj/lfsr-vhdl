@@ -91,14 +91,23 @@ architecture rtl of lfsr is
 		S_OUT       -- Output byte when ready
 	);
 
-	type alu_t is (A_XOR, A_AND, A_LSL1, A_LSR1, A_LOAD, A_STORE, A_JMP, A_JMPZ);
+	type alu_t is (
+		A_XOR,   -- XOR accumulator with operand/loaded value
+		A_AND,   -- AND accumulator with operand/loaded value
+		A_LSL1,  -- Shift accumulator left by 1
+		A_LSR1,  -- Shift accumulator right by 1
+		A_LOAD,  -- Load through operand or already loaded value to accumulator 
+		A_STORE, -- Store accumulator to operand or loaded value
+		A_JMP,   -- Unconditional Jump
+		A_JMPZ   -- Conditional Jump
+	);
 
 	type registers_t is record
 		acc:   std_ulogic_vector(N - 1 downto 0); -- Multi purpose register
 		val:   std_ulogic_vector(N - 1 downto 0); -- Value loaded or just the operand
 		pc:    std_ulogic_vector(pc_length - 1 downto 0); -- Program Counter
-		alu:   alu_t; -- Used to store instruction
-		state: state_t;    -- CPU State Register
+		alu:   alu_t;   -- Used to store instruction
+		state: state_t; -- CPU State Register
 	end record;
 
 	constant registers_default: registers_t := (
@@ -166,6 +175,7 @@ architecture rtl of lfsr is
 		end if;
 		-- synthesis translate_on
 	end procedure;
+
 begin
 	-- The following asserts could be placed in this module if what
 	-- they were asserting was "buffered". As they are not, they go
@@ -197,7 +207,8 @@ begin
 	re    <= not dop after delay;
 	we    <= dop after delay;
 
-	process (clk, rst) begin
+	process (clk, rst) 
+	begin
 		-- This used to just set `c.state` into a reset state, which no longer
 		-- exists, instead of setting all registers to their default values. 
 		-- This was removed to make the system as small as possible. 
@@ -213,7 +224,7 @@ begin
 					assert (f.state = S_FETCH and pause = '1') or f.state = S_INDIRECT or f.state = S_ALU; 
 				end if;
 				if c.state = S_INDIRECT then assert f.state = S_ALU; end if;
-				if c.state = S_ALU then assert f.state /= S_INDIRECT; end if;
+				if c.state = S_ALU then assert f.state /= S_INDIRECT and f.state /= S_NEXT; end if;
 				if c.state = S_LOAD then assert f.state = S_NEXT; end if;
 				if c.state = S_STORE then assert f.state = S_NEXT; end if;
 				if c.state = S_IN then assert f.state = S_IN or f.state = S_NEXT; end if;
@@ -222,27 +233,31 @@ begin
 		end if;
 	end process;
 
-	process (c, i, npc, jump, ibyte, obsy, ihav, pause) begin
-		f <= c after delay;
+	process (c, i, npc, jump, ibyte, obsy, ihav, pause) 
+		alias indirect is i(i'high);
+		alias alu is i(i'high - 1 downto i'high - 3);
+		alias operand is i(i'high - 4 downto 0);
+	begin
+		f      <= c after delay;
 		halted <= '0' after delay;
-		io_we <= '0' after delay;
-		io_re <= '0' after delay;
-		dop <= '0' after delay; -- read enabled when `dop='0'`, write otherwise
-		a <= (others => '0') after delay;
+		io_we  <= '0' after delay;
+		io_re  <= '0' after delay;
+		dop    <= '0' after delay; -- read enabled when `dop='0'`, write otherwise
+		a      <= (others => '0') after delay;
 		a(c.pc'range) <= c.pc after delay;
 		blocked <= '0' after delay;
 
 		case c.state is
 		when S_FETCH =>
 			f.state <= S_ALU after delay;
-			f.alu <= alu_t'val(to_integer(unsigned(i(i'high - 1 downto i'high - 3)))) after delay;
+			f.alu <= alu_t'val(to_integer(unsigned(alu))) after delay;
 			f.val <= (others => '0') after delay;
-			f.val(i'high - 4 downto 0) <= i(i'high - 4 downto 0) after delay;
+			f.val(i'high - 4 downto 0) <= operand after delay;
 			if pause = '1' then
 				f.state <= S_FETCH after delay;
-			elsif i(i'high) = '1' then
+			elsif indirect = '1' then
 				a <= (others => '0');
-				a(i'high - 4 downto 0) <= i(i'high - 4 downto 0) after delay;
+				a(i'high - 4 downto 0) <= operand after delay;
 				f.state <= S_INDIRECT after delay;
 			end if;
 		when S_INDIRECT =>
@@ -290,11 +305,11 @@ begin
 			blocked <= '1' after delay;
 			if ihav = '1' then
 				f.state <= S_NEXT after delay;
-				io_re <= '1' after delay;
+				io_re   <= '1' after delay;
 				blocked <= '0' after delay;
 			elsif non_blocking_input then
 				f.state <= S_NEXT after delay;
-				f.acc <= (others => '1') after delay;
+				f.acc   <= (others => '1') after delay;
 				blocked <= '0' after delay;
 			end if;
 		when S_OUT =>
@@ -304,7 +319,7 @@ begin
 			blocked <= '1' after delay;
 			if obsy = '0' then
 				f.state <= S_NEXT after delay;
-				io_we <= '1' after delay;
+				io_we   <= '1' after delay;
 				blocked <= '0' after delay;
 			end if;
 		end case;
