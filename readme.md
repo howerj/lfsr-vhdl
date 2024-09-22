@@ -20,6 +20,14 @@ The project currently works in simulation (it outputs the startup message
 "eForth 3.3" with a new line) and accepts input (try typing "words" when the
 simulation in [GHDL][] is running).
 
+Here is an example session of the simulator running:
+
+![C Simulator Running eForth](lfsr-0.gif)
+
+And the VHDL running under GHDL for a limited number of cycles:
+
+![VHDL Simulator Running eForth](lfsr-1.gif)
+
 # CPU Resource Utilization
 
 The system runs can run at 151.768MHz (on a Spartan-6) according to the timing
