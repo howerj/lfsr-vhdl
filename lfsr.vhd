@@ -44,6 +44,9 @@
 -- If you find a use for this CPU, please let me know, it has been made just
 -- for fun and I doubt it has practical applications.
 --
+-- The code for making a LFSR could go in its own module, we could also make
+-- it was we can generate XNOR variants as well.
+--
 
 library ieee, work, std;
 use ieee.std_logic_1164.all;

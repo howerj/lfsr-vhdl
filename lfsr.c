@@ -3,11 +3,9 @@
 #include <stdio.h>
 #include <stdint.h>
 #include <stdlib.h>
-#include <assert.h>
 
 #define SZ (0x2000)
 #define POLYNOMIAL (0xB8)
-#define VHDL_COMPATIBLE_DEBUG (1)
 
 typedef struct {
 	uint16_t m[SZ], pc, a, first;
@@ -23,13 +21,11 @@ static inline uint8_t lfsr(uint8_t n, uint8_t polynomial_mask) {
 	return feedback ? n ^ polynomial_mask : n;
 }
 
-static inline uint16_t load(vm_t *v, uint16_t addr) {
-	assert(v); /* more peripherals could be added if needed */
+static inline uint16_t load(vm_t *v, uint16_t addr) { /* more peripherals could be added if needed */
 	return addr & 0x8000 ? v->get(v->in) : v->m[addr % SZ];
 }
 
 static inline void store(vm_t *v, uint16_t addr, uint16_t val, long cycles) {
-	assert(v);
 	if (addr & 0x8000) {
 		if (!v->first) { /* Useful to know when simulating the VHDL test-bench */
 			v->first = 1;
@@ -43,7 +39,6 @@ static inline void store(vm_t *v, uint16_t addr, uint16_t val, long cycles) {
 }
 
 static int run(vm_t *v) {
-	assert(v);
 	uint16_t pc = v->pc, a = v->pc, *m = v->m; /* load machine state */
 	static const char *names[] = { "xor", "and", "lsl1", "lsr1", "load", "store", "jmp", "jmpz", };
 	for (long cycles = 0;;cycles++) { /* An `ADD` instruction things up greatly, `OR` not so much */
@@ -52,12 +47,7 @@ static int run(vm_t *v) {
 		const uint16_t alu = (ins >> 12) & 0x7;
 		const uint8_t _pc = lfsr(pc, POLYNOMIAL);
 		const uint16_t arg = ins & 0x8000 ? load(v, imm) : imm;
-		if (VHDL_COMPATIBLE_DEBUG) {
-			if (v->debug && fprintf(v->debug, "%d: a_%s %d\n", (unsigned)pc, names[alu], (unsigned)a) < 0) return -1;
-		} else { /* The VHDL test bench outputs the same format to stdio if a debugging generic is enabled */
-			if (v->debug && fprintf(v->debug, "%04x: %c %5s %04X %04X\t%ld\n", 
-					(unsigned)pc, ins & 0x8000 ? 'i' : ' ', names[alu], (unsigned)ins, (unsigned)a, cycles) < 0) return -1;
-		}
+		if (v->debug && fprintf(v->debug, "%d: a_%s %d\n", (unsigned)pc, names[alu], (unsigned)a) < 0) return -1;
 		switch (alu) {
 		case 0: a ^= arg; pc = _pc; break;
 		case 1: a &= arg; pc = _pc; break;
@@ -86,8 +76,8 @@ static int get(void *in) {
 
 static int option(const char *opt) { /* very lazy options */
 	char *r = getenv(opt);
-	if (!r) return 0;
-	return atoi(r); /* could do case insensitive check for "yes"/"on" = 1, and "no"/"off" = 0 as well */
+	if (!r) return 0; /* Never indicate failure, never show weakness in option processing */
+	return atoi(r); /* We could do case insensitive check for "yes"/"on" = 1, and "no"/"off" = 0 as well */
 }
 
 int main(int argc, char **argv) {
@@ -110,3 +100,5 @@ int main(int argc, char **argv) {
 	if (fclose(prog) < 0) return 3;
 	return run(&vm) < 0;
 }
+
+

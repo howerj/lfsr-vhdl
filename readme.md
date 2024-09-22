@@ -281,6 +281,7 @@ endings also need to be made to be identical for both inputs.
 * <https://www.righto.com/2020/11/reverse-engineering-ram-storage-in.html>
 * <https://sheep-thrills.net/NES_lockout_chip_address_smartness.html>
 * <https://en.wikipedia.org/wiki/Texas_Instruments_TMS1000>
+* <https://hackmii.com/2010/01/the-weird-and-wonderful-cic/>
 
 [GHDL]: http://ghdl.free.fr/
 [FPGA]: https://en.wikipedia.org/wiki/Field-programmable_gate_array
