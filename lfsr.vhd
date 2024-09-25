@@ -55,17 +55,18 @@ use std.textio.all; -- Used for debug only (turned off for synthesis)
 
 entity lfsr is
 	generic (
-		asynchronous_reset: boolean    := true;   -- use asynchronous reset if true, synchronous if false
-		delay:              time       := 0 ns;   -- simulation only, gate delay
-		N:                  positive   := 16;     -- size the CPU
-		pc_length:          positive   := 8;      -- size of the LFSR polynomial
-		jspec:              std_ulogic_vector(4 downto 0) := "00111"; -- Jump specification
-		polynomial:         std_ulogic_vector(15 downto 0) := x"00B8"; -- LFSR polynomial to use
-		non_blocking_input: boolean    := false;  -- if true, input will be -1 if there is no input
-		pc_is_lfsr:         boolean    := true;   -- switch between using a counter and using a LFSR
-		halt_enable:        boolean    := false;  -- a jump to self causes `halted` to be raised
-		multiple_io:        boolean    := false;  -- enable address output on I/O states
-		debug:              natural    := 0);     -- debug level, 0 = off
+		asynchronous_reset:  boolean    := true;   -- use asynchronous reset if true, synchronous if false
+		delay:               time       := 0 ns;   -- simulation only, gate delay
+		N:                   positive   := 16;     -- size the CPU
+		pc_length:           positive   := 8;      -- size of the LFSR polynomial
+		jspec:               std_ulogic_vector(4 downto 0)  := "00111"; -- Jump specification
+		polynomial:          std_ulogic_vector(15 downto 0) := x"00B8"; -- LFSR polynomial to use
+		non_blocking_input:  boolean    := false;  -- if true, input will be -1 if there is no input
+		non_blocking_output: boolean    := false;  -- if true, output is non-blocking, no feedback
+		add_instead_of_lsl1: boolean    := false;  -- use add instead of A_LSL1
+		pc_is_lfsr:          boolean    := true;   -- switch between using a counter and using a LFSR
+		halt_enable:         boolean    := false;  -- a jump to self causes `halted` to be raised
+		debug:               natural    := 0);     -- debug level, 0 = off
 	port (
 		clk:           in std_ulogic; -- Guess what this is?
 		rst:           in std_ulogic; -- Can be sync or async
@@ -89,15 +90,13 @@ architecture rtl of lfsr is
 		S_ALU,      -- ALU instruction
 		S_STORE,    -- Store instruction
 		S_LOAD,     -- Load instruction
-		S_NEXT,     -- No Jump, load next PC
-		S_IN,       -- Wait for input
-		S_OUT       -- Output byte when ready
+		S_NEXT      -- No Jump, load next PC
 	);
 
 	type alu_t is (
 		A_XOR,   -- XOR accumulator with operand/loaded value
 		A_AND,   -- AND accumulator with operand/loaded value
-		A_LSL1,  -- Shift accumulator left by 1
+		A_LSL1,  -- Shift accumulator left by 1 (or ADD, controllable with a generic)
 		A_LSR1,  -- Shift accumulator right by 1
 		A_LOAD,  -- Load through operand or already loaded value to accumulator 
 		A_STORE, -- Store accumulator to operand or loaded value
@@ -228,10 +227,9 @@ begin
 				end if;
 				if c.state = S_INDIRECT then assert f.state = S_ALU; end if;
 				if c.state = S_ALU then assert f.state /= S_INDIRECT and f.state /= S_NEXT; end if;
-				if c.state = S_LOAD then assert f.state = S_NEXT; end if;
-				if c.state = S_STORE then assert f.state = S_NEXT; end if;
-				if c.state = S_IN then assert f.state = S_IN or f.state = S_NEXT; end if;
-				if c.state = S_OUT then assert f.state = S_OUT or f.state = S_NEXT; end if;
+				if c.state = S_LOAD then assert f.state = S_NEXT or f.state = S_LOAD; end if;
+				if c.state = S_STORE then assert f.state = S_NEXT or f.state = S_STORE; end if;
+				if c.state = S_NEXT then assert f.state = S_FETCH; end if;
 			end if;
 		end if;
 	end process;
@@ -274,57 +272,56 @@ begin
 			case c.alu is
 			when A_XOR => f.acc <= c.acc xor c.val after delay;
 			when A_AND => f.acc <= c.acc and c.val after delay;
-			when A_LSL1 => f.acc <= c.acc(c.acc'high - 1 downto 0) & "0" after delay;
+			when A_LSL1 => 
+				if add_instead_of_lsl1 then
+					f.acc <= std_ulogic_vector(unsigned(c.acc) + unsigned(c.val)) after delay;
+				else
+					f.acc <= c.acc(c.acc'high - 1 downto 0) & "0" after delay;
+				end if;
 			when A_LSR1 => f.acc <= "0" & c.acc(c.acc'high downto 1) after delay;
-			when A_LOAD => a <= c.val after delay; f.state <= S_LOAD after delay; if c.val(f.val'high) = '1' then f.state <= S_IN after delay; end if;
-			when A_STORE => a <= c.val after delay; f.state <= S_STORE after delay; if c.val(f.val'high) = '1' then f.state <= S_OUT after delay; end if;
+			when A_LOAD => a <= c.val after delay; f.state <= S_LOAD after delay;
+			when A_STORE => a <= c.val after delay; f.state <= S_STORE after delay;
 			when A_JMP => a <= c.val after delay; f.pc <= c.val(f.pc'range) after delay; f.state <= S_FETCH after delay; 
 				if halt_enable and c.val(c.pc'range) = c.pc then halted <= '1' after delay; end if;
 			when A_JMPZ => if jump = jspec(JS_C) then a <= c.val after delay; f.pc <= c.val(f.pc'range) after delay; f.state <= S_FETCH after delay; end if;
 			end case;
 		when S_STORE =>
 			a <= c.val after delay;
-			dop <= '1' after delay;
-			f.state <= S_NEXT after delay;
+			if c.val(c.val'high) = '1' then
+				blocked <= '1' after delay;
+				if obsy = '0' then
+					f.state <= S_NEXT after delay;
+					io_we   <= '1' after delay;
+					blocked <= '0' after delay;
+				elsif non_blocking_output then
+					f.state <= S_NEXT after delay;
+				end if;
+			else
+				dop <= '1' after delay;
+				f.state <= S_NEXT after delay;
+			end if;
 		when S_LOAD =>
 			a <= c.val after delay;
-			f.acc <= i after delay;
-			f.state <= S_NEXT after delay;
+			if c.val(c.val'high) = '1' then
+				blocked <= '1' after delay;
+				f.acc <= (others => '0') after delay;
+				f.acc(ibyte'range) <= ibyte after delay;
+				if ihav = '1' then
+					f.state <= S_NEXT after delay;
+					io_re   <= '1' after delay;
+					blocked <= '0' after delay;
+				elsif non_blocking_input then
+					f.state <= S_NEXT after delay;
+					f.acc   <= (others => '1') after delay;
+					blocked <= '0' after delay;
+				end if;
+			else
+				f.acc <= i after delay;
+				f.state <= S_NEXT after delay;
+			end if;
 		when S_NEXT =>
 			f.state <= S_FETCH after delay;
 			a(c.pc'range) <= c.pc after delay;
-		-- The I/O could be reworked, it does not need to be part of the
-		-- the CPU, it just makes implemented a UART driven eForth interface
-		-- easier as it behaves much like the C VM. The rework would entail
-		-- is removing the `S_IN` and `S_OUT` states along with associated
-		-- signals and handling I/O with proper memory mapping with `S_LOAD`
-		-- and `S_STORE`. This would require software changes as well.
-		when S_IN => 
-			if multiple_io then
-				a <= c.val after delay; -- Used so an external I/O system can determine what we are reading from (if needed)
-			end if;
-			f.acc <= (others => '0') after delay;
-			f.acc(ibyte'range) <= ibyte after delay;
-			blocked <= '1' after delay;
-			if ihav = '1' then
-				f.state <= S_NEXT after delay;
-				io_re   <= '1' after delay;
-				blocked <= '0' after delay;
-			elsif non_blocking_input then
-				f.state <= S_NEXT after delay;
-				f.acc   <= (others => '1') after delay;
-				blocked <= '0' after delay;
-			end if;
-		when S_OUT =>
-			if multiple_io then
-				a <= c.val after delay; -- Used so an external I/O system can determine what we are writing to (if needed)
-			end if;
-			blocked <= '1' after delay;
-			if obsy = '0' then
-				f.state <= S_NEXT after delay;
-				io_we   <= '1' after delay;
-				blocked <= '0' after delay;
-			end if;
 		end case;
 	end process;
 end architecture;

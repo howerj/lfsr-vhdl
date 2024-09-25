@@ -206,14 +206,10 @@ Graphviz, this can be done online, see <https://dreampuf.github.io/GraphvizOnlin
 		alu -> fetch;
 		alu -> load;
 		alu -> store;
-		alu -> in;
-		alu -> out;
+		load -> load [label = "ihav = 0\nand input"]
 		load -> next;
 		store -> next;
-		in -> next;
-		in -> in [label = "ihav = 0"];
-		out -> next;
-		out -> out [label = "obsy = 1"];
+		store -> store [label = "obsy = 1\nand output"];
 		next -> fetch;
 	}
 
@@ -243,7 +239,7 @@ file should work:
 	1Line... # Exit after getting one line of input if non zero
 	1
 	UChDelay # Delay (ms) between sending UART characters
-	3
+	1
 	CRLF.EOF # Line ending CRLF (1) or LF (0)?
 	0
 
@@ -276,6 +272,18 @@ endings also need to be made to be identical for both inputs.
   - The Input/Output system could be reworked, making I/O truly memory mapped.
   This would mean that the `S_IN` and `S_OUT` states could be eliminated.
 * See <https://github.com/howerj/lfsr> for more information and suggestions.
+* The number of these devices that could fit on one device could be quite
+  large, limited perhaps by the number of Block RAMs available. Modifications
+  would have to be made to program and interact with a matrix of these CPUs,
+  but it might be a neat thing to do. They could take their input from the same
+  UART and the same starting commands or boot image, synchronization could be 
+  partially achieved with `pause`, `ihav` and `obsy` signals. Each CPU would
+  need an identifier assigned to it. It might be a good idea to have a way for
+  each CPU to talk to its immediate neighbors. Most of these problems could be
+  solved with a adjustments to the I/O system and the addition of peripherals
+  and pseudo peripherals.
+* The `lfsr.vhd` file is quite configurable with many generics, the tool-chain
+  could be made to generate Forth images that deal with the variants.
 
 # References
 
