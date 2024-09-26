@@ -87,7 +87,6 @@ architecture rtl of lfsr is
 	type state_t is (
 		S_FETCH,    -- Load instruction
 		S_INDIRECT, -- Indirect through operand
-		S_ALU,      -- ALU instruction
 		S_STORE,    -- Store instruction
 		S_LOAD,     -- Load instruction
 		S_NEXT      -- No Jump, load next PC
@@ -121,7 +120,10 @@ architecture rtl of lfsr is
 
 	signal c, f: registers_t := registers_default; -- All state is captured in here
 	signal jump, zero, dop: std_ulogic := '0'; -- Transient CPU Flags
-	signal npc: std_ulogic_vector(pc_length - 1 downto 0) := (others => '0'); -- Potential next PC value
+	signal npc, rpc: std_ulogic_vector(pc_length - 1 downto 0) := (others => '0'); -- Potential next PC value
+	signal ra, rb, rout, raddr: std_ulogic_vector(N - 1 downto 0) := (others => '0');
+	signal rstate: state_t := S_FETCH;
+	signal alu: alu_t := A_XOR;
 
 	constant AZ: std_ulogic_vector(N - 1 downto 0) := (others => '0'); -- All Zeros
 
@@ -154,9 +156,9 @@ architecture rtl of lfsr is
 		-- C simulator when it has debugging turned on (modulo some extra messages
 		-- the VHDL test bench produces which should be obvious in a diff).
 		if debug = 2 then
-			if c.state = S_ALU then
+			if c.state = S_FETCH then
 				write(oline, uint(c.pc) & ": ");
-				write(oline, alu_t'image(c.alu) & " ");
+				write(oline, alu_t'image(alu) & " ");
 				write(oline, uint(c.acc));
 				writeline(OUTPUT, oline);
 			end if;
@@ -222,11 +224,8 @@ begin
 				c <= registers_default after delay;
 			else
 				print_debug_info;
-				if c.state = S_FETCH then 
-					assert (f.state = S_FETCH and pause = '1') or f.state = S_INDIRECT or f.state = S_ALU; 
-				end if;
-				if c.state = S_INDIRECT then assert f.state = S_ALU; end if;
-				if c.state = S_ALU then assert f.state /= S_INDIRECT and f.state /= S_NEXT; end if;
+				if c.state = S_FETCH then assert f.state /= S_NEXT; end if;
+				if c.state = S_INDIRECT then assert f.state /= S_NEXT and f.state /= S_INDIRECT; end if;
 				if c.state = S_LOAD then assert f.state = S_NEXT or f.state = S_LOAD; end if;
 				if c.state = S_STORE then assert f.state = S_NEXT or f.state = S_STORE; end if;
 				if c.state = S_NEXT then assert f.state = S_FETCH; end if;
@@ -234,24 +233,50 @@ begin
 		end if;
 	end process;
 
-	process (c, i, npc, jump, ibyte, obsy, ihav, pause) 
-		alias indirect is i(i'high);
-		alias alu is i(i'high - 1 downto i'high - 3);
+	process (c, jump, npc, ra, rb, alu)
+	begin
+		rout <= ra after delay;
+		raddr <= (others => '0') after delay;
+		raddr(npc'range) <= npc after delay;
+		rpc <= npc after delay;
+		rstate <= S_FETCH after delay;
+		halted <= '0' after delay;
+		case alu is
+		when A_XOR => rout <= ra xor rb after delay;
+		when A_AND => rout <= ra and rb after delay;
+		when A_LSL1 => 
+			if add_instead_of_lsl1 then rout <= std_ulogic_vector(unsigned(ra) + unsigned(rb)) after delay;
+			else rout <= ra(ra'high - 1 downto 0) & "0" after delay; end if;
+		when A_LSR1 => rout <= "0" & ra(ra'high downto 1) after delay;
+		when A_LOAD => raddr <= rb after delay; rstate <= S_LOAD after delay;
+		when A_STORE => raddr <= rb after delay; rstate <= S_STORE after delay;
+		when A_JMP => raddr <= rb after delay; rpc <= rb(rpc'range) after delay; rstate <= S_FETCH after delay; 
+			if halt_enable and rb(c.pc'range) = c.pc and c.state = S_FETCH then halted <= '1' after delay; end if;
+		when A_JMPZ => if jump = jspec(JS_C) then raddr <= rb after delay; rpc <= rb(rpc'range) after delay; rstate <= S_FETCH after delay; end if;
+		end case;
+	end process;
+
+	ra <= c.acc after delay;
+
+	process (c, i, ibyte, obsy, ihav, pause, rout, raddr, rstate, rpc) 
+		alias indirect is i(i'high); -- old versions of GHDL have problems with these aliases.
+		alias alubits is i(i'high - 1 downto i'high - 3);
 		alias operand is i(i'high - 4 downto 0);
 	begin
 		f      <= c after delay;
-		halted <= '0' after delay;
 		io_we  <= '0' after delay;
 		io_re  <= '0' after delay;
 		dop    <= '0' after delay; -- read enabled when `dop='0'`, write otherwise
 		a      <= (others => '0') after delay;
 		a(c.pc'range) <= c.pc after delay;
 		blocked <= '0' after delay;
+		alu <= alu_t'val(to_integer(unsigned(alubits))) after delay;
+		rb <= (others => '0') after delay;
+		rb(operand'range) <= operand after delay;
 
 		case c.state is
 		when S_FETCH =>
-			f.state <= S_ALU after delay;
-			f.alu <= alu_t'val(to_integer(unsigned(alu))) after delay;
+			f.alu <= alu_t'val(to_integer(unsigned(alubits))) after delay;
 			f.val <= (others => '0') after delay;
 			f.val(operand'range) <= operand after delay;
 			if pause = '1' then
@@ -260,31 +285,20 @@ begin
 				a <= (others => '0');
 				a(operand'range) <= operand after delay;
 				f.state <= S_INDIRECT after delay;
+			else
+				a <= raddr after delay;
+				f.acc <= rout after delay;
+				f.state <= rstate after delay;
+				f.pc <= rpc after delay;
 			end if;
 		when S_INDIRECT =>
-			a <= c.val after delay;
+			rb <= i after delay;
+			alu <= c.alu after delay;
+			a <= raddr after delay;
 			f.val <= i after delay;
-			f.state <= S_ALU after delay;
-		when S_ALU => -- N.B. We might get away with removing this state if we turn this into its own logic block
-			f.state <= S_FETCH after delay;
-			a(npc'range) <= npc after delay;
-			f.pc <= npc after delay;
-			case c.alu is
-			when A_XOR => f.acc <= c.acc xor c.val after delay;
-			when A_AND => f.acc <= c.acc and c.val after delay;
-			when A_LSL1 => 
-				if add_instead_of_lsl1 then
-					f.acc <= std_ulogic_vector(unsigned(c.acc) + unsigned(c.val)) after delay;
-				else
-					f.acc <= c.acc(c.acc'high - 1 downto 0) & "0" after delay;
-				end if;
-			when A_LSR1 => f.acc <= "0" & c.acc(c.acc'high downto 1) after delay;
-			when A_LOAD => a <= c.val after delay; f.state <= S_LOAD after delay;
-			when A_STORE => a <= c.val after delay; f.state <= S_STORE after delay;
-			when A_JMP => a <= c.val after delay; f.pc <= c.val(f.pc'range) after delay; f.state <= S_FETCH after delay; 
-				if halt_enable and c.val(c.pc'range) = c.pc then halted <= '1' after delay; end if;
-			when A_JMPZ => if jump = jspec(JS_C) then a <= c.val after delay; f.pc <= c.val(f.pc'range) after delay; f.state <= S_FETCH after delay; end if;
-			end case;
+			f.acc <= rout after delay;
+			f.pc <= rpc after delay;
+			f.state <= rstate after delay;
 		when S_STORE =>
 			a <= c.val after delay;
 			if c.val(c.val'high) = '1' then

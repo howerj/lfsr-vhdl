@@ -199,14 +199,14 @@ The following can be used to create a state-machine diagram with
 Graphviz, this can be done online, see <https://dreampuf.github.io/GraphvizOnline/>:
 
 	digraph LfsrCpu {
-		fetch -> fetch [label = "pause = 1"];
+		fetch -> fetch [label = "pause = 1\nor next instr"];
 		fetch -> indirect;
-		fetch -> alu;
-		indirect -> alu;
-		alu -> fetch;
-		alu -> load;
-		alu -> store;
-		load -> load [label = "ihav = 0\nand input"]
+		fetch -> load;
+		fetch -> store;
+		indirect -> fetch;
+		indirect -> load;
+		indirect -> store;
+		load -> load [label = "ihav = 0\nand input"];
 		load -> next;
 		store -> next;
 		store -> store [label = "obsy = 1\nand output"];
@@ -284,6 +284,23 @@ endings also need to be made to be identical for both inputs.
   and pseudo peripherals.
 * The `lfsr.vhd` file is quite configurable with many generics, the tool-chain
   could be made to generate Forth images that deal with the variants.
+* A Dual-Port version of the CPU would be faster, although require more resources,
+  this CPU in its current form can share one half a Dual Port Block RAM allowing
+  very fast memory mapped I/O.
+* The eForth image could be turned into ROM sections (the Forth Virtual Machine
+  and the initial Forth dictionary could go here) and sections that can be stored
+  in RAM. This ROM/RAM version would also execute faster, provided only the Forth
+  VM was to be stored in ROM.
+* A bit-serial version of this CPU could be made, it might be smaller, it would
+  certainly be slower.
+* A simulation written in VHDL using components based off of real 7400 series
+  devices could be made. This should make it easier to build a physical version
+  of this system out of 7400 series ICs, and will most likely be faster than
+  other digital simulators. This would involve making components for each 7400
+  series IC we would want to use, sticking to the common ones (NAND gates,
+  counters, multiplexors, flip flops, comparators, decoders) would be best,
+  as some of the more exotic devices (such as ALUs, adders, ...) can be harder
+  to find.
 
 # References
 
