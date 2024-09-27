@@ -47,7 +47,7 @@ static int run(vm_t *v) {
 		const uint16_t alu = (ins >> 12) & 0x7;
 		const uint8_t _pc = lfsr(pc, POLYNOMIAL);
 		const uint16_t arg = ins & 0x8000 ? load(v, imm, 0) : imm;
-		if (v->debug && fprintf(v->debug, "%d: a_%s %d\n", (unsigned)pc, names[alu], (unsigned)a) < 0) return -1;
+		if (v->debug && fprintf(v->debug, "%d: %c a_%s %d\n", (unsigned)pc, ins & 0x8000 ? 'i' : '-', names[alu], (unsigned)a) < 0) return -1;
 		switch (alu) {
 		case 0: a ^= arg; pc = _pc; break;
 		case 1: a &= arg; pc = _pc; break;

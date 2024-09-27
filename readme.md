@@ -142,8 +142,8 @@ The `INSTRUCTION` field is 3-bits in size, the instructions are:
 
 	0 : XOR   : ACC = ACC ^ ARG
 	1 : AND   : ACC = ACC & ARG
-	2 : LLS1  : ACC = ACC << 1
-	3 : LRS1  : ACC = ACC >> 1
+	2 : LLS1  : ACC = ARG << 1
+	3 : LRS1  : ACC = ARG >> 1
 	4 : LOAD  : ACC = MEM[ARG]
 	5 : STORE : MEM[ARG] = ACC
 	6 : JUMP  : PC = ARG
@@ -151,9 +151,8 @@ The `INSTRUCTION` field is 3-bits in size, the instructions are:
 
 All instructions advance the program counter except `JUMP`, and
 (conditionally) `JUMPZ`. All instruction affect or use the accumulator
-except the jump instructions, and all arguments use the `ARG` value
-except the shift instructions `LLS1`/`LRS1`. `MEM` consists of a
-linear array of 16-bit values.
+except the jump instructions. `MEM` consists of a linear array of 
+16-bit values.
 
 There is one special address, address 0. This address is never
 incremented after an instruction is run as this is a lock up state for
@@ -214,7 +213,7 @@ Graphviz, this can be done online, see <https://dreampuf.github.io/GraphvizOnlin
 	}
 
 Alternatively, here is a veritable feast of a PNG file for both your lovely eye balls
-to take in an gaze upon, or to just look at, whatever:
+to take in and gaze upon with wonder, or to just look at, whatever:
 
 ![CPU State Machine](lfsr-sm.png)
 
@@ -260,6 +259,33 @@ related to VHDL report messages. The instructions executed should be identical
 so long as the input is identical, to make sure this is the case the line
 endings also need to be made to be identical for both inputs.
 
+Empirically the system averages 2.4 clock cycles (or 2.4 state changes) to execute a 
+single instruction, this was measured by executing the default Forth image and feeding
+it a line of text with the quit/halt word "bye" in it. This was calculated from the
+following table, which contains the number of times the instruction has been encountered,
+whether the instruction is the indirect variant (marked with an 'i'), the instruction, 
+the number of cycles needed to execute that instruction and the cycles multiplied by
+instruction cycle length.
+
+	+--------+--------+----------+---------+---------+
+	| cycles | indir? | instr?   | cyc/ins |         |
+	+--------+--------+----------+---------+---------+
+	| 369492 |        |  a_jmp   | 1       | 369492  |
+	| 241070 |        |  a_jmpz  | 1       | 241070  |
+	| 880098 |        |  a_load  | 3       | 2640294 |
+	| 1450   |        |  a_lsr1  | 1       | 1450    |
+	| 880388 |        |  a_store | 3       | 2641164 |
+	| 206102 | i      |  a_and   | 2       | 412204  |
+	| 65755  | i      |  a_jmp   | 2       | 131510  |
+	| 32042  | i      |  a_jmpz  | 2       | 64084   |
+	| 53057  | i      |  a_load  | 4       | 212228  |
+	| 173287 | i      |  a_lsl1  | 2       | 346574  |
+	| 17053  | i      |  a_store | 4       | 68212   |
+	| 173513 | i      |  a_xor   | 2       | 347026  |
+	+--------+--------+----------+---------+---------+
+	Total Instructions executed: 3093307 
+	Total Instruction cycles: 7475308
+
 # To Do / Future Directions
 
 * Improve the documentation; the addition of timing diagrams, terminal capture
@@ -267,10 +293,7 @@ endings also need to be made to be identical for both inputs.
   help. Much of the documentation from the sister project could be incorporated
   into this one.
 * Optimize the CPU core:
-  - It might be possible to combine the ALU operation with the `S_FETCH` and
-  `S_INDIRECT` states.
   - The Input/Output system could be reworked, making I/O truly memory mapped.
-  This would mean that the `S_IN` and `S_OUT` states could be eliminated.
 * See <https://github.com/howerj/lfsr> for more information and suggestions.
 * The number of these devices that could fit on one device could be quite
   large, limited perhaps by the number of Block RAMs available. Modifications

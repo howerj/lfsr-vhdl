@@ -84,6 +84,11 @@ entity lfsr is
 end;
 
 architecture rtl of lfsr is
+	-- Previous incarnations of this processor had a state just
+	-- for executing the ALU operation, this made the processor smaller,
+	-- and allowed for a higher FMAX, but overall made the processor
+	-- slower to execute. It could be optionally used via a compiler
+	-- generic.
 	type state_t is (
 		S_FETCH,    -- Load instruction
 		S_INDIRECT, -- Indirect through operand
@@ -150,6 +155,14 @@ architecture rtl of lfsr is
 		begin
 			return integer'image(to_integer(unsigned(slv)));
 		end function;
+		function yn(sl: std_ulogic; ch: character) return string is -- print a flag
+			variable rs: string(1 to 2) := "- ";
+		begin
+			if sl = '1' then
+				rs(1) := ch;
+			end if;
+			return rs;
+		end function;
 	begin
 		-- synthesis translate_off
 		-- When `debug = 2` we can produce output that should be the same as our
@@ -158,6 +171,7 @@ architecture rtl of lfsr is
 		if debug = 2 then
 			if c.state = S_FETCH then
 				write(oline, uint(c.pc) & ": ");
+				write(oline, yn(i(i'high), 'i'));
 				write(oline, alu_t'image(alu) & " ");
 				write(oline, uint(c.acc));
 				writeline(OUTPUT, oline);
@@ -246,8 +260,8 @@ begin
 		when A_AND => rout <= ra and rb after delay;
 		when A_LSL1 => 
 			if add_instead_of_lsl1 then rout <= std_ulogic_vector(unsigned(ra) + unsigned(rb)) after delay;
-			else rout <= ra(ra'high - 1 downto 0) & "0" after delay; end if;
-		when A_LSR1 => rout <= "0" & ra(ra'high downto 1) after delay;
+			else rout <= rb(rb'high - 1 downto 0) & "0" after delay; end if;
+		when A_LSR1 => rout <= "0" & rb(rb'high downto 1) after delay;
 		when A_LOAD => raddr <= rb after delay; rstate <= S_LOAD after delay;
 		when A_STORE => raddr <= rb after delay; rstate <= S_STORE after delay;
 		when A_JMP => raddr <= rb after delay; rpc <= rb(rpc'range) after delay; rstate <= S_FETCH after delay; 
@@ -339,4 +353,5 @@ begin
 		end case;
 	end process;
 end architecture;
+
 

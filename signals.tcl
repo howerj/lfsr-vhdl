@@ -5,7 +5,6 @@
 gtkwave::/Edit/Set_Trace_Max_Hier 0
 gtkwave::/Time/Zoom/Zoom_Amount -27.0
 gtkwave::/View/Show_Filled_High_Values 1
-#gtkwave::setFromEntry 170ns
 
 set names {
 	top.tb.rst
