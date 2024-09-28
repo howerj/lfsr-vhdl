@@ -46,7 +46,7 @@ end entity;
 
 architecture rtl of system is
 	constant data_length: positive := N;
-	constant addr_length: positive := N - 3;
+	constant addr_length: positive := N - 4;
 
 	signal i, o, a: std_ulogic_vector(N - 1 downto 0) := (others => 'U');
 	signal re, we:  std_ulogic := 'U';

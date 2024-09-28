@@ -4,7 +4,7 @@
 #include <stdint.h>
 #include <stdlib.h>
 
-#define SZ (0x2000)
+#define SZ (0x1000)
 #define POLYNOMIAL (0xB8)
 
 typedef struct {
