@@ -21,8 +21,6 @@ entity top is
 		N:               positive        := 16;
 		baud:            positive        := 115200;
 		debug:           natural         := 0; -- will not synthesize if greater than zero (debug off = 0)
-		uart_use_cfg:    boolean         := false;
-		uart_fifo_depth: natural         := 0;
 		halt_enable:     boolean         := false
 	);
 	port (
@@ -37,9 +35,6 @@ entity top is
 end entity;
 
 architecture rtl of top is
-	constant data_length:  positive := N;
-	constant W:            positive := N - 3;
-	constant addr_length:  positive := W;
 	constant clks_per_bit: integer  := calc_clks_per_bit(g.clock_frequency, baud);
 	constant delay:        time     := g.delay;
 

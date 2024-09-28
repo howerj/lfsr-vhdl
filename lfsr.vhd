@@ -224,6 +224,7 @@ begin
 	obyte <= c.acc(obyte'range) after delay;
 	re    <= not dop after delay;
 	we    <= dop after delay;
+	ra <= c.acc after delay;
 
 	process (clk, rst) 
 	begin
@@ -247,7 +248,7 @@ begin
 		end if;
 	end process;
 
-	process (c, jump, npc, ra, rb, alu)
+	process (c.pc, jump, npc, ra, rb, alu)
 	begin
 		rout <= ra after delay;
 		raddr <= (others => '0') after delay;
@@ -269,8 +270,6 @@ begin
 		when A_JMPZ => if jump = jspec(JS_C) then raddr <= rb after delay; rpc <= rb(rpc'range) after delay; rstate <= S_FETCH after delay; end if;
 		end case;
 	end process;
-
-	ra <= c.acc after delay;
 
 	process (c, i, ibyte, obsy, ihav, pause, rout, raddr, rstate, rpc) 
 		alias indirect is i(i'high); -- old versions of GHDL have problems with these aliases.
@@ -353,5 +352,4 @@ begin
 		end case;
 	end process;
 end architecture;
-
 

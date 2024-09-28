@@ -272,7 +272,7 @@ end entity;
 architecture behav of single_port_block_ram is
 	constant ram_size: positive := 2 ** addr_length;
 
-	type ram_type is array ((ram_size - 1 ) downto 0) of std_ulogic_vector(data_length - 1 downto 0);
+	type ram_type is array ((ram_size - 1) downto 0) of std_ulogic_vector(data_length - 1 downto 0);
 
 	impure function initialize_ram(the_file_name: in string; the_file_type: in file_format) return ram_type is
 		variable ram_data:   ram_type;

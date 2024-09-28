@@ -51,8 +51,8 @@ static int run(vm_t *v) {
 		switch (alu) {
 		case 0: a ^= arg; pc = _pc; break;
 		case 1: a &= arg; pc = _pc; break;
-		case 2: a <<= 1; pc = _pc; break;
-		case 3: a >>= 1; pc = _pc; break;
+		case 2: a = arg << 1; pc = _pc; break;
+		case 3: a = arg >> 1; pc = _pc; break;
 		case 4: a = load(v, arg, 1); pc = _pc; break;
 		case 5: store(v, arg, a, cycles); pc = _pc; break;
 		case 6: if (pc == arg) goto end; pc = arg; break; /* `goto end` for testing only */
