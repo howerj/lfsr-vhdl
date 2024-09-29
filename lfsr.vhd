@@ -224,7 +224,7 @@ begin
 	obyte <= c.acc(obyte'range) after delay;
 	re    <= not dop after delay;
 	we    <= dop after delay;
-	ra <= c.acc after delay;
+	ra    <= c.acc after delay;
 
 	process (clk, rst) 
 	begin
