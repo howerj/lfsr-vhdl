@@ -21,16 +21,18 @@
 -- This is enough to implement a Virtual Machine which can address the full
 -- range a 16-bit value allows (65536 cells).
 --
--- The CPU is a proof-of-concept, although when laying gates out by hand
--- there is a saving in numbers of gates (and also a potential speed boost
--- compared to a normal adder) due to the way the primitives on an FPGA are
--- implemented there is most likely no saving at all (the building blocks,
+-- The CPU is a proof-of-concept, although when laying gates out by hand in 
+-- silicon there is a saving in numbers of gates (and also a potential speed 
+-- boost compared to a normal adder) due to the way the primitives on an FPGA 
+-- are implemented there is most likely no saving at all (the building blocks,
 -- Slices and Configurable Logic Blocks on Xilinx devices) contain logic
 -- to help implement the carry logic needed by an adder efficiently.
 --
 -- The CPU starts executing at address 0, which is a special value for a
 -- XOR based LFSR in that it is a lockup state from which there is no escape.
--- This can be addressed by having the first instruction as a JUMP.
+-- This can be addressed by having the first instruction as a JUMP, alternatively
+-- XNOR could have been used as the basis of the LFSR, XNOR based LFSR have a
+-- lockup state of all ones instead of all zeroes.
 --
 -- There are 8 instructions; XOR, AND, Left Shift by 1, Right Shift by 1,
 -- Load, Store, Jump and Jump-on-Zero. Each instruction has a 12-bit operand,
@@ -224,7 +226,7 @@ begin
 	obyte <= c.acc(obyte'range) after delay;
 	re    <= not dop after delay;
 	we    <= dop after delay;
-	ra    <= c.acc after delay;
+	ra <= c.acc after delay;
 
 	process (clk, rst) 
 	begin

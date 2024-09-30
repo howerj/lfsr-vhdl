@@ -324,6 +324,13 @@ instruction cycle length.
   counters, multiplexors, flip flops, comparators, decoders) would be best,
   as some of the more exotic devices (such as ALUs, adders, ...) can be harder
   to find.
+* The article <https://www.fpgarelated.com/showarticle/797.php>, or
+  Inside the Spartan-6: Using LUTs to optimize circuits by Victor Yurkovsky,
+  publish June 24, 2015, contains information about optimizing LUT usage
+  by explicitly instantiating and placing LUTs and other FPGA logic. If we
+  really want to shrink this system, we could do the same here. There is also
+  an interesting article about outputting VGA signals in only 7 slices:
+  <https://www.fpgarelated.com/showarticle/42.php>.
 
 # References
 
@@ -346,4 +353,5 @@ instruction cycle length.
 [VHDL]: https://en.wikipedia.org/wiki/VHDL
 [LFSR]: https://en.wikipedia.org/wiki/Linear-feedback_shift_register
 [7400]: https://en.wikipedia.org/wiki/7400-series_integrated_circuits
+
 

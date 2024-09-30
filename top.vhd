@@ -39,40 +39,45 @@ architecture rtl of top is
 	constant delay:        time     := g.delay;
 
 	signal rst: std_ulogic := '0';
+
+	type registers_t is record
+		hav: std_ulogic;
+		ibyte: std_ulogic_vector(7 downto 0);
+	end record;
+
+	constant registers_default: registers_t := (
+		hav => '0',
+		ibyte => (others => '0')
+	);
+
+	signal c, f: registers_t := registers_default;
+
 	signal bsy, hav, io_re, io_we: std_ulogic := 'U';
 	signal obyte, ibyte: std_ulogic_vector(7 downto 0) := (others => 'U');
-
-	signal c_hav, n_hav: std_ulogic := '0';
-	signal c_ibyte, n_ibyte: std_ulogic_vector(7 downto 0) := (others => '0');
-
 begin
 	assert not (io_re = '1' and io_we = '1') severity warning;
 
 	process (clk, rst) begin -- N.B. We could use register components for this
 		if rst = '1' and g.asynchronous_reset then
-			c_hav <= '0';
-			c_ibyte <= (others => '0');
+			c <= registers_default after delay;
 		elsif rising_edge(clk) then
-			c_hav <= n_hav after delay;
-			c_ibyte <= n_ibyte after delay;
+			c <= f after delay;
 			if rst = '1' and not g.asynchronous_reset then
-				c_hav <= '0';
-				c_ibyte <= (others => '0');			
+				c <= registers_default after delay;
 			end if;
 		end if;
 	end process;
 
-	process (c_hav, c_ibyte, hav, ibyte, io_re) begin
-		n_hav <= c_hav after delay;
-		n_ibyte <= c_ibyte after delay;
+	process (c, hav, ibyte, io_re) begin
+		f <= c after delay;
 
 		if hav = '1' then
-			n_hav <= '1' after delay;
-			n_ibyte <= ibyte after delay;
+			f.hav <= '1' after delay;
+			f.ibyte <= ibyte after delay;
 		end if;
 
 		if io_re = '1' then
-			n_hav <= '0' after delay;
+			f.hav <= '0' after delay;
 		end if;
 	end process;
 
@@ -91,9 +96,9 @@ begin
 		blocked => blocked,
 		-- synthesis translate_on
 		obyte   => obyte,
-		ibyte   => c_ibyte,
+		ibyte   => c.ibyte,
 		obsy    => bsy,
-		ihav    => c_hav,
+		ihav    => c.hav,
 		io_we   => io_we, 
 		io_re   => io_re);
 
