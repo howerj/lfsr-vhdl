@@ -63,8 +63,6 @@ entity lfsr is
 		pc_length:           positive   := 8;      -- size of the LFSR polynomial
 		jspec:               std_ulogic_vector(4 downto 0)  := "00111"; -- Jump specification
 		polynomial:          std_ulogic_vector(15 downto 0) := x"00B8"; -- LFSR polynomial to use
-		non_blocking_input:  boolean    := false;  -- if true, input will be -1 if there is no input
-		non_blocking_output: boolean    := false;  -- if true, output is non-blocking, no feedback
 		add_instead_of_lsl1: boolean    := false;  -- use add instead of A_LSL1
 		pc_is_lfsr:          boolean    := true;   -- switch between using a counter and using a LFSR
 		halt_enable:         boolean    := false;  -- a jump to self causes `halted` to be raised
@@ -76,10 +74,6 @@ entity lfsr is
 		i:             in std_ulogic_vector(N - 1 downto 0); -- Memory access; Input
 		a:            out std_ulogic_vector(N - 1 downto 0); -- Memory access; Address
 		we, re:       out std_ulogic; -- Write and read enable for memory only
-		obyte:        out std_ulogic_vector(7 downto 0); -- Output byte
-		ibyte:         in std_ulogic_vector(7 downto 0); -- Input byte
-		obsy, ihav:    in std_ulogic; -- Output busy / Have input
-		io_we, io_re: out std_ulogic; -- Write and read enable for I/O
 		pause:         in std_ulogic; -- pause the CPU in the `S_FETCH` state
 		blocked:      out std_ulogic; -- is the CPU paused, or blocking on I/O?
 		halted:       out std_ulogic); -- Is the system halted?
@@ -202,7 +196,6 @@ begin
 	-- in the next module up.
 	--
 	--   assert not (re = '1' and we = '1') severity warning;
-	--   assert not (io_re = '1' and io_we = '1') severity warning;
 
 	assert N >= 8 report "LFSR machine width too small, must be greater or equal to 8 bits" severity failure;
 
@@ -223,10 +216,9 @@ begin
 	zero  <= '1' when jspec(JS_ZEN) = '1' and c.acc = AZ else '0' after delay;
 	jump  <= '1' when (jspec(JS_NEN) = '1' and c.acc(c.acc'high) = jspec(JS_NC)) or zero = jspec(JS_ZC) else '0' after delay;
 	o     <= c.acc after delay;
-	obyte <= c.acc(obyte'range) after delay;
 	re    <= not dop after delay;
 	we    <= dop after delay;
-	ra <= c.acc after delay;
+	ra    <= c.acc after delay;
 
 	process (clk, rst) 
 	begin
@@ -273,14 +265,12 @@ begin
 		end case;
 	end process;
 
-	process (c, i, ibyte, obsy, ihav, pause, rout, raddr, rstate, rpc) 
+	process (c, i, pause, rout, raddr, rstate, rpc) 
 		alias indirect is i(i'high); -- old versions of GHDL have problems with these aliases.
 		alias alubits is i(i'high - 1 downto i'high - 3);
 		alias operand is i(i'high - 4 downto 0);
 	begin
 		f      <= c after delay;
-		io_we  <= '0' after delay;
-		io_re  <= '0' after delay;
 		dop    <= '0' after delay; -- read enabled when `dop='0'`, write otherwise
 		a      <= (others => '0') after delay;
 		a(c.pc'range) <= c.pc after delay;
@@ -316,38 +306,12 @@ begin
 			f.state <= rstate after delay;
 		when S_STORE =>
 			a <= c.val after delay;
-			if c.val(c.val'high) = '1' then
-				blocked <= '1' after delay;
-				if obsy = '0' then
-					f.state <= S_NEXT after delay;
-					io_we   <= '1' after delay;
-					blocked <= '0' after delay;
-				elsif non_blocking_output then
-					f.state <= S_NEXT after delay;
-				end if;
-			else
-				dop <= '1' after delay;
-				f.state <= S_NEXT after delay;
-			end if;
+			dop <= '1' after delay;
+			f.state <= S_NEXT after delay;
 		when S_LOAD =>
 			a <= c.val after delay;
-			if c.val(c.val'high) = '1' then
-				blocked <= '1' after delay;
-				f.acc <= (others => '0') after delay;
-				f.acc(ibyte'range) <= ibyte after delay;
-				if ihav = '1' then
-					f.state <= S_NEXT after delay;
-					io_re   <= '1' after delay;
-					blocked <= '0' after delay;
-				elsif non_blocking_input then
-					f.state <= S_NEXT after delay;
-					f.acc   <= (others => '1') after delay;
-					blocked <= '0' after delay;
-				end if;
-			else
-				f.acc <= i after delay;
-				f.state <= S_NEXT after delay;
-			end if;
+			f.acc <= i after delay;
+			f.state <= S_NEXT after delay;
 		when S_NEXT =>
 			f.state <= S_FETCH after delay;
 			a(c.pc'range) <= c.pc after delay;

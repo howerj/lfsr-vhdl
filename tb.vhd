@@ -103,26 +103,26 @@ begin
 		uart_tb_1: entity work.uart_rx_tb;
 	end generate;
 
-	gt: if en_non_io_tb generate
-	uut: entity work.system
-		generic map(
-			g          => g,
-			file_name  => program,
-			N          => N,
-			debug      => debug,
-			halt_enable => true)
-		port map (
-			clk  => clk,
-			rst  => rst,
-			halted => halted,
-			blocked => blocked,
-			obyte => rx_data,
-			ibyte => tx_data,
-			obsy => obsy,
-		       	ihav => ihav,
-			io_we => rx_hav,
-			io_re => io_re);
-	end generate;
+--	gt: if en_non_io_tb generate
+--	uut: entity work.system
+--		generic map(
+--			g          => g,
+--			file_name  => program,
+--			N          => N,
+--			debug      => debug,
+--			halt_enable => true)
+--		port map (
+--			clk  => clk,
+--			rst  => rst,
+--			halted => halted,
+--			blocked => blocked,
+--			obyte => rx_data,
+--			ibyte => tx_data,
+--			obsy => obsy,
+--		       	ihav => ihav,
+--			io_we => rx_hav,
+--			io_re => io_re);
+--	end generate;
 
 	gn: if not en_non_io_tb generate
 	uut: entity work.top

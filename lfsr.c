@@ -5,24 +5,22 @@
 #include <stdlib.h>
 
 #define SZ (0x1000)
-#define POLYNOMIAL (0xB8) /* 0x84 gives period 217 instead of 255 but uses 2 taps */
-#define PCMSK (0xFF)
 
 enum { OLFSR = 1 << 0, OADD = 1 << 1, OFIRST = 1 << 2, };
 
 typedef struct {
-	uint16_t m[SZ], pc, a, opts;
+	uint16_t m[SZ], pc, a, opts, polynomial, pcmask;
 	int (*get)(void *in);
 	int (*put)(void *out, int ch);
 	void *in, *out;
 	FILE *debug;
 } vm_t;
 
-static inline uint16_t lfsr(uint16_t n, uint16_t polynomial_mask, int add) {
-	if (add) return (n + 1) & PCMSK;
+static inline uint16_t lfsr(uint16_t n, uint16_t polynomial_mask, uint16_t pcmask, int add) {
+	if (add) return (n + 1) & pcmask;
 	const int feedback = n & 1;
 	n >>= 1;
-	return (feedback ? n ^ polynomial_mask : n) & PCMSK;
+	return (feedback ? n ^ polynomial_mask : n) & pcmask;
 }
 
 static inline uint16_t load(vm_t *v, uint16_t addr, int io) { /* more peripherals could be added if needed */
@@ -43,19 +41,19 @@ static inline void store(vm_t *v, uint16_t addr, uint16_t val, long cycles) {
 }
 
 static int run(vm_t *v) {
-	uint16_t pc = v->pc, a = v->pc, *m = v->m, opts = v->opts; /* load machine state */
+	uint16_t pc = v->pc, a = v->pc, *m = v->m, opts = v->opts, polynomial = v->polynomial, pcmask = v->pcmask;
 	static const char *names[] = { "xor", "and", "lsl1", "lsr1", "load", "store", "jmp", "jmpz", };
 	for (long cycles = 0;;cycles++) { /* An `ADD` instruction things up greatly, `OR` not so much */
 		const uint16_t ins = m[pc % SZ];
 		const uint16_t imm = ins & 0xFFF;
 		const uint16_t alu = (ins >> 12) & 0x7;
-		const uint16_t _pc = lfsr(pc, POLYNOMIAL, !!(opts & OLFSR));
+		const uint16_t _pc = lfsr(pc, polynomial, pcmask, !!(opts & OLFSR));
 		const uint16_t arg = ins & 0x8000 ? load(v, imm, 0) : imm;
 		if (v->debug && fprintf(v->debug, "%d: %c a_%s %d\n", (unsigned)pc, ins & 0x8000 ? 'i' : '-', names[alu], (unsigned)a) < 0) return -1;
 		switch (alu) {
 		case 0: a ^= arg; pc = _pc; break;
 		case 1: a &= arg; pc = _pc; break;
-		case 2: a = opts & OADD ? a + arg : arg << 1; pc = _pc; break;
+		case 2: a = opts & OADD ? a + arg : arg << 1; pc = _pc; break; /* optional ADD/shift left by 1*/
 		case 3: a = arg >> 1; pc = _pc; break;
 		case 4: a = load(v, arg, 1); pc = _pc; break;
 		case 5: store(v, arg, a, cycles); pc = _pc; break;
@@ -85,7 +83,13 @@ static int option(const char *opt) { /* very lazy options */
 }
 
 int main(int argc, char **argv) {
-	vm_t vm = { .pc = 0, .put = put, .get = get, .in = stdin, .out = stdout, .debug = option("DEBUG") ? stderr : NULL, };
+	vm_t vm = { 
+		.put = put, .get = get, .in = stdin, .out = stdout, 
+		.debug      = option("DEBUG") ? stderr : NULL, 
+		.polynomial = option("LFSR_POLY") ? option("LFSR_POLY") : 0xB8, /* 0x84 gives period 217 instead of 255 but uses 2 taps */
+		.pcmask     = option("LFSR_MASK") ? option("LFSR_MASK") : 0xFF, /* Sets bitwidth of program counter */
+		.opts       = (OLFSR * !!option("LFSR_INC")) | (OADD * !!option("LFSR_ADD")),
+	};
 	if (argc < 2) {
 		(void)fprintf(stderr, "Usage: %s prog.hex\n", argv[0]);
 		return 1;

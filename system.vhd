@@ -32,24 +32,25 @@ entity system is
 		halt_enable: boolean       := false
 	);
 	port (
-		clk:           in std_ulogic;
-		rst:           in std_ulogic;
+		clk:      in std_ulogic;
+		rst:      in std_ulogic;
 		-- synthesis translate_off
-		halted:       out std_ulogic;
-		blocked:      out std_ulogic;
+		halted:  out std_ulogic;
+		blocked: out std_ulogic;
 		-- synthesis translate_on
-		obyte:        out std_ulogic_vector(7 downto 0);
-		ibyte:         in std_ulogic_vector(7 downto 0);
-		obsy, ihav:    in std_ulogic;
+		io_a:        out std_ulogic_vector(N - 1 downto 0);
+		io_o:       out std_ulogic_vector(N - 1 downto 0);
+		io_i:        in std_ulogic_vector(N - 1 downto 0);
 		io_we, io_re: out std_ulogic);
 end entity;
 
 architecture rtl of system is
 	constant data_length: positive := N;
 	constant addr_length: positive := N - 4;
+	constant delay: time := g.delay;
 
-	signal i, o, a: std_ulogic_vector(N - 1 downto 0) := (others => 'U');
-	signal re, we:  std_ulogic := 'U';
+	signal i, blk_i, o, a: std_ulogic_vector(N - 1 downto 0) := (others => '0');
+	signal re, we, blk_re, blk_we, high: std_ulogic := '0';
 
 	procedure print_debug_info is -- Not synthesize-able, hence synthesis turned off
 		variable oline: line;
@@ -78,6 +79,15 @@ architecture rtl of system is
 begin
 	assert not (re = '1' and we = '1') severity warning;
 
+	high <= a(a'high) after delay;
+	io_re <= high and re after delay;
+	io_we <= high and we after delay;
+	io_a <= a after delay;
+	i <= blk_i when high = '0' else io_i after delay;
+	io_o <= o after delay;
+	blk_re <= (not high) and re after delay;
+	blk_we <= (not high) and we after delay;
+
 	-- synthesis translate_off
 	process (clk) begin
 		if rising_edge(clk) then
@@ -104,14 +114,8 @@ begin
 			i       => i,
 			o       => o, 
 			a       => a, 
-			obsy    => obsy,
-			ihav    => ihav,
-			io_re   => io_re,
-			io_we   => io_we,
 			re      => re,
-			we      => we,
-			obyte   => obyte,
-			ibyte   => ibyte);
+			we      => we);
 
 	bram: entity work.single_port_block_ram
 		generic map(
@@ -122,11 +126,11 @@ begin
 			data_length => data_length)
 		port map (
 			clk  => clk,
-			dwe  => we,
+			dwe  => blk_we,
 			addr => a(addr_length - 1 downto 0),
-			dre  => re,
+			dre  => blk_re,
 			din  => o,
-			dout => i);
+			dout => blk_i);
 end architecture;
 
 

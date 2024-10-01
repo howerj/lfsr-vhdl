@@ -41,21 +41,29 @@ architecture rtl of top is
 	signal rst: std_ulogic := '0';
 
 	type registers_t is record
-		hav: std_ulogic;
-		ibyte: std_ulogic_vector(7 downto 0);
+		uart: std_ulogic_vector(N - 1 downto 0);
 	end record;
 
 	constant registers_default: registers_t := (
-		hav => '0',
-		ibyte => (others => '0')
+		uart => (others => '0')
 	);
 
 	signal c, f: registers_t := registers_default;
 
-	signal bsy, hav, io_re, io_we: std_ulogic := 'U';
-	signal obyte, ibyte: std_ulogic_vector(7 downto 0) := (others => 'U');
+	signal bsy, hav, io_re, io_we, stx: std_ulogic := '0';
+	signal odata, addr: std_ulogic_vector(N - 1 downto 0) := (others => '0');
+	signal obyte, ibyte: std_ulogic_vector(7 downto 0) := (others => '0');
+
+	constant U_TXOVR: integer := 14;
+	constant U_TXMAN: integer := 13;
+	constant U_TXBSY: integer := 12;
+	constant U_TXWRT: integer := 11;
+	constant U_RXMAN: integer := 10;
+	constant U_RXHAV: integer := 9;
 begin
 	assert not (io_re = '1' and io_we = '1') severity warning;
+
+	tx <= c.uart(U_TXMAN) when c.uart(U_TXOVR) = '1' else stx after delay;
 
 	process (clk, rst) begin -- N.B. We could use register components for this
 		if rst = '1' and g.asynchronous_reset then
@@ -68,16 +76,19 @@ begin
 		end if;
 	end process;
 
-	process (c, hav, ibyte, io_re) begin
+	process (c, hav, ibyte, odata, bsy, io_re, io_we, rx) begin
 		f <= c after delay;
+		f.uart(U_TXWRT) <= '0' after delay;
+		f.uart(U_RXMAN) <= rx after delay;
+		f.uart(U_TXBSY) <= bsy after delay;
 
-		if hav = '1' then
-			f.hav <= '1' after delay;
-			f.ibyte <= ibyte after delay;
+		if io_we = '1' then -- and io_a == XXXX
+			f.uart <= odata after delay;
 		end if;
 
-		if io_re = '1' then
-			f.hav <= '0' after delay;
+		if hav = '1' then
+			f.uart(U_RXHAV) <= '1' after delay;
+			f.uart(ibyte'range) <= ibyte after delay;
 		end if;
 	end process;
 
@@ -95,10 +106,9 @@ begin
 		halted  => halted,
 		blocked => blocked,
 		-- synthesis translate_on
-		obyte   => obyte,
-		ibyte   => c.ibyte,
-		obsy    => bsy,
-		ihav    => c.hav,
+		io_a    => addr,
+		io_o    => odata,
+		io_i    => c.uart,
 		io_we   => io_we, 
 		io_re   => io_re);
 
@@ -106,10 +116,10 @@ begin
 		generic map(clks_per_bit => clks_per_bit, delay => delay)
 		port map(
 			clk => clk,
-			tx_we => io_we,
-			tx_byte => obyte,
+			tx_we => c.uart(U_RXHAV),
+			tx_byte => odata(obyte'range),
 			tx_active => bsy,
-			tx_serial => tx,
+			tx_serial => stx,
 			tx_done => open);
 
 	uart_rx_0: entity work.uart_rx
