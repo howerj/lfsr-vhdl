@@ -250,7 +250,7 @@ begin
 		end if;
 	end process;
 
-	process (c.pc, jump, npc, ra, rb, alu)
+	process (c.pc, jump, npc, ra, rb, alu, i)
 	begin
 		rout <= ra after delay;
 		raddr <= (others => '0') after delay;
@@ -268,7 +268,7 @@ begin
 		when A_LOAD => raddr <= rb after delay; rstate <= S_LOAD after delay;
 		when A_STORE => raddr <= rb after delay; rstate <= S_STORE after delay;
 		when A_JMP => raddr <= rb after delay; rpc <= rb(rpc'range) after delay; rstate <= S_FETCH after delay; 
-			if halt_enable and rb(c.pc'range) = c.pc and c.state = S_FETCH then halted <= '1' after delay; end if;
+			if halt_enable and rb(c.pc'range) = c.pc and c.state = S_FETCH and i(i'high) = '0' then halted <= '1' after delay; end if;
 		when A_JMPZ => if jump = jspec(JS_C) then raddr <= rb after delay; rpc <= rb(rpc'range) after delay; rstate <= S_FETCH after delay; end if;
 		end case;
 	end process;

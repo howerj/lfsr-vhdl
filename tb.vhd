@@ -28,7 +28,8 @@ entity tb is
 		en_non_io_tb:       boolean  := false; -- Do not generate UART, talk directly to `system.vhd` which is faster
 		program:            string   := "lfsr.hex";
 		config:             string   := "tb.cfg"; -- Run Time Configuration options
-		N:                  positive := 16
+		N:                  positive := 16;
+		halt_enable:        boolean  := true
 	);
 end tb;
 
@@ -106,40 +107,40 @@ begin
 	gt: if en_non_io_tb generate
 	uut: entity work.system
 		generic map(
-			g          => g,
-			file_name  => program,
-			N          => N,
-			debug      => debug,
-			halt_enable => true)
+			g           => g,
+			file_name   => program,
+			N           => N,
+			debug       => debug,
+			halt_enable => halt_enable)
 		port map (
-			clk  => clk,
-			rst  => rst,
-			halted => halted,
+			clk     => clk,
+			rst     => rst,
+			halted  => halted,
 			blocked => blocked,
-			obyte => rx_data,
-			ibyte => tx_data,
-			obsy => obsy,
-		       	ihav => ihav,
-			io_we => rx_hav,
-			io_re => io_re);
+			obyte   => rx_data,
+			ibyte   => tx_data,
+			obsy    => obsy,
+		       	ihav    => ihav,
+			io_we   => rx_hav,
+			io_re   => io_re);
 	end generate;
 
 	gn: if not en_non_io_tb generate
 	uut: entity work.top
 		generic map(
-			g          => g,
-			file_name  => program,
-			N          => N,
-			baud       => baud,
-			debug      => debug,
-			halt_enable => true)
+			g           => g,
+			file_name   => program,
+			N           => N,
+			baud        => baud,
+			debug       => debug,
+			halt_enable => halt_enable)
 		port map (
-			clk  => clk,
---			rst  => rst,
-			halted => halted,
+			clk     => clk,
+--			rst     => rst,
+			halted  => halted,
 			blocked => blocked,
-			tx   => rx,
-			rx   => tx);
+			tx      => rx,
+			rx      => tx);
 
 	uart_rx_0: entity work.uart_rx
 		generic map(clks_per_bit => clks_per_bit)
