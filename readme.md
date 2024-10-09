@@ -331,6 +331,16 @@ instruction cycle length.
   really want to shrink this system, we could do the same here. There is also
   an interesting article about outputting VGA signals in only 7 slices:
   <https://www.fpgarelated.com/showarticle/42.php>.
+* The instruction set could be played around with, there are some really
+  interesting instructions such as `execute this register as an instruction`
+  (which is appropriate for a register machine and not an accumulator machine,
+  adding a full rotate and removing the shift left/right by one instructions, or 
+  perhaps my favorite, using a Lookup Table (LUT) to determine what the output 
+  should be for two inputs which would allow all two input logic gates to be 
+  implemented, see <https://arnaud-carre.github.io/2024-10-06-vpternlogd/> for 
+  an example of a three input version. Setting the LUT would require setting a
+  4-bit register for a 2-input LUT, which could be tacked on to the JUMP
+  instruction as we have bits to spare (we only use 8-bits).
 
 # References
 

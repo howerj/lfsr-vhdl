@@ -19,29 +19,29 @@ entity tb is
 	-- 	ghdl -r tb '-gbaud=9600' '-gen_non_io_tb=true'
 	--
 	generic (
-		clock_frequency:    positive := 100_000_000;
-		asynchronous_reset: boolean  := false;
-		delay:              time     := 0 ns;
-		debug:              integer  := 0;
-		baud:               positive := 115200;
-		en_uart_tbs:        boolean  := false; -- Generate UART test benches as well?
-		en_non_io_tb:       boolean  := false; -- Do not generate UART, talk directly to `system.vhd` which is faster
-		program:            string   := "lfsr.hex";
-		config:             string   := "tb.cfg"; -- Run Time Configuration options
-		N:                  positive := 16;
-		halt_enable:        boolean  := true
+		clock_frequency:    positive := 100_000_000; -- System Clock Rate (Hz)
+		asynchronous_reset: boolean  := false;       -- if true, async reset, if false, sync
+		delay:              time     := 0 ns;        -- gate delay
+		debug:              integer  := 0;           -- Debug on (non zero = non synth)
+		baud:               positive := 115200;      -- UART baud rate
+		en_uart_tbs:        boolean  := false;       -- Generate UART test benches as well?
+		en_non_io_tb:       boolean  := false;       -- Do not generate UART, talk directly to `system.vhd` which is faster
+		program:            string   := "lfsr.hex";  -- Program to load
+		config:             string   := "tb.cfg";    -- Run Time Configuration options
+		N:                  positive := 16;          -- Bit Width of CPU
+		halt_enable:        boolean  := true         -- Enable Halt state/signal in CPU
 	);
 end tb;
 
 architecture testing of tb is
-	constant g:            common_generics := (
-		clock_frequency => clock_frequency,
-		delay => delay,
+	constant g: common_generics := (
+		clock_frequency    => clock_frequency,
+		delay              => delay,
 		asynchronous_reset => asynchronous_reset
 	); 
-	constant clock_period: time     := 1000 ms / g.clock_frequency;
-	constant clks_per_bit: integer  := g.clock_frequency / baud;
-	constant bit_period:   time     := clks_per_bit * clock_period;
+	constant clock_period: time    := 1000 ms / g.clock_frequency;
+	constant clks_per_bit: integer := g.clock_frequency / baud;
+	constant bit_period:   time    := clks_per_bit * clock_period;
 
 	signal stop:   boolean    := false;
 	signal clk:    std_ulogic := '0';

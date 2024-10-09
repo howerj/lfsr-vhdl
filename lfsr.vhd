@@ -36,10 +36,10 @@
 --
 -- There are 8 instructions; XOR, AND, Left Shift by 1, Right Shift by 1,
 -- Load, Store, Jump and Jump-on-Zero. Each instruction has a 12-bit operand,
--- and if the high bit is set that operand is loaded from memory instead of
--- being used directly by the instruction (thus turning a load into an indirect
--- load, a jump into an indirect jump, or loading a full 16-bit value to be
--- AND'ed with the accumulator).
+-- and if the high bit is set on the instruction that operand is loaded from memory 
+-- instead of being used directly by the instruction (thus turning a load into 
+-- an indirect load, a jump into an indirect jump, or loading a full 16-bit value 
+-- to be AND'ed with the accumulator).
 --
 -- There are no interrupts.
 --
@@ -48,6 +48,22 @@
 --
 -- The code for making a LFSR could go in its own module, we could also make
 -- it was we can generate XNOR variants as well.
+--
+-- The core is quite configurable, as can be seen from the number of
+-- generics that are supported. The bit-width can be changed, the reset
+-- behavior, whether a LFSR or an adder is used for the PC, the PC width,
+-- and even some of the instructions can be changed. The instruction set
+-- is well chosen but would be greatly improved if it has an ADD instruction
+-- alongside full-shifts instead of shifts by one, and an OR instruction.
+--
+-- We could also make more instructions configurable by generics, such as
+-- NAND replacing AND, and more.
+--
+-- One interesting instruction would be to use a 2:1 4-bit LUT applied to
+-- each bit of the ALU inputs in turn, allowing us to implement any of the
+-- 16 binary logic operators. We would also need a method of setting the 4-bit
+-- LUT, which could perhaps be tacked on to a JUMP instruction as we are only
+-- using 8 of the 12 bits available to us.
 --
 
 library ieee, work, std;
@@ -128,9 +144,9 @@ architecture rtl of lfsr is
 	signal c, f: registers_t := registers_default; -- All state is captured in here
 	signal jump, zero, dop: std_ulogic := '0'; -- Transient CPU Flags
 	signal npc, rpc: std_ulogic_vector(pc_length - 1 downto 0) := (others => '0'); -- Potential next PC value
-	signal ra, rb, rout, raddr: std_ulogic_vector(N - 1 downto 0) := (others => '0');
-	signal rstate: state_t := S_FETCH;
-	signal alu: alu_t := A_XOR;
+	signal ra, rb, rout, raddr: std_ulogic_vector(N - 1 downto 0) := (others => '0'); -- ALU signals
+	signal rstate: state_t := S_FETCH; -- Computed next state signal from ALU
+	signal alu: alu_t := A_XOR; -- ALU operation signal
 
 	constant AZ: std_ulogic_vector(N - 1 downto 0) := (others => '0'); -- All Zeros
 
