@@ -341,6 +341,20 @@ instruction cycle length.
   an example of a three input version. Setting the LUT would require setting a
   4-bit register for a 2-input LUT, which could be tacked on to the JUMP
   instruction as we have bits to spare (we only use 8-bits).
+* LFSR, and the related Cyclic Redundancy Checks (CRC), have many uses, Pseudo Random
+  Number Generation (PRNG), test vector generation and checking, Built In Self 
+  Tests (BIST), and more. Using LFSR for test vector generation, in both a test
+  bench and in hardware, would allow us to query the CPU with many test
+  patterns and efficiently compare this to a result, in hardware this could be
+  part of a BIST peripheral that sets a pin high on success.
+* This project would be a good candidate for the [Tiny Tapeout][] project,
+  amongst my others projects. Tiny Tapeout allows designers to cheaply make
+  their own physical silicon. The interface would be a problem and would
+  require shifting data in and out N-bits at a time as there are a limited
+  number of pins available to interface with external memory (both RAM and
+  ROM ICs would be required). This would mean we would need to be able to
+  pause the CPU in any state, or other modifications would need to be made.
+  Perhaps <https://github.com/howerj/bit-serial> would make a better candidate?
 
 # References
 
@@ -355,6 +369,12 @@ instruction cycle length.
 * <https://sheep-thrills.net/NES_lockout_chip_address_smartness.html>
 * <https://en.wikipedia.org/wiki/Texas_Instruments_TMS1000>
 * <https://hackmii.com/2010/01/the-weird-and-wonderful-cic/>
+* <https://www.eetimes.com/tutorial-linear-feedback-shift-registers-lfsrs-part-3/>
+* <https://stackoverflow.com/questions/28179701/>
+* <https://en.wikipedia.org/wiki/Computation_of_cyclic_redundancy_checks>
+* <https://stackoverflow.com/questions/5781458/>
+* <https://crypto.stackexchange.com/questions/67670/>
+* <https://en.wikipedia.org/wiki/Cyclic_redundancy_check>
 
 [GHDL]: http://ghdl.free.fr/
 [FPGA]: https://en.wikipedia.org/wiki/Field-programmable_gate_array
@@ -363,5 +383,6 @@ instruction cycle length.
 [VHDL]: https://en.wikipedia.org/wiki/VHDL
 [LFSR]: https://en.wikipedia.org/wiki/Linear-feedback_shift_register
 [7400]: https://en.wikipedia.org/wiki/7400-series_integrated_circuits
+[Tiny Tapeout]: <https://tinytapeout.com/>
 
 
