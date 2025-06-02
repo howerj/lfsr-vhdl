@@ -47,7 +47,8 @@
 -- for fun and I doubt it has practical applications.
 --
 -- The code for making a LFSR could go in its own module, we could also make
--- it was we can generate XNOR variants as well.
+-- it so we can generate XNOR variants as well, but you probably did not come
+-- here for that.
 --
 -- The core is quite configurable, as can be seen from the number of
 -- generics that are supported. The bit-width can be changed, the reset
@@ -57,7 +58,9 @@
 -- alongside full-shifts instead of shifts by one, and an OR instruction.
 --
 -- We could also make more instructions configurable by generics, such as
--- NAND replacing AND, and more.
+-- NAND replacing AND, and more. The generics that are available are mainly
+-- just to show what is possible, to show how flexible you can make your
+-- modules.
 --
 -- One interesting instruction would be to use a 2:1 4-bit LUT applied to
 -- each bit of the ALU inputs in turn, allowing us to implement any of the

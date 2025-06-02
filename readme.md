@@ -18,7 +18,8 @@ The system contains a fully working [Forth][] interpreter.
 
 The project currently works in simulation (it outputs the startup message
 "eForth 3.3" with a new line) and accepts input (try typing "words" when the
-simulation in [GHDL][] is running).
+simulation in [GHDL][] is running). It has been synthesized for an FPGA (and it
+should work), however I lack a suitable FPGA board to test the system on.
 
 Here is an example session of the simulator running:
 
@@ -30,27 +31,27 @@ And the VHDL running under GHDL for a limited number of cycles:
 
 # CPU Resource Utilization
 
-The system runs can run at 151.768MHz (on a Spartan-6) according to the timing
-report. The CPU itself is quite small, here is a cut-down report on the
-resources consumed for commit `7dc4c9b7e03082364b09540bb2d97105d2858d0b`:
+The system runs at 137.489MHz (on a Spartan-6) according to the timing
+report. The CPU itself is very small, here is a cut-down report on the
+resources consumed for commit `e9e54f373cf508fc5d0718983c8f16921fa2311c`:
 
 	+------------------------------------------------------------+
-	| Module     | Slices | Slice Reg | LUTs  | BRAM/FIFO | BUFG | 
+	| Module     | Slices | Slice Reg | LUTs  | BRAM/FIFO | BUFG |
 	+------------------------------------------------------------+
-	| top/       | 3/53   | 9/105     | 1/151 | 0/8       | 1/1  | 
-	| +system    | 0/27   | 0/47      | 0/85  | 0/8       | 0/0  | 
-	| ++bram     | 0/0    | 0/0       | 0/0   | 8/8       | 0/0  | 
-	| ++cpu      | 27/27  | 47/47     | 85/85 | 0/0       | 0/0  | 
-	| +uart_rx_0 | 12/12  | 24/24     | 39/39 | 0/0       | 0/0  | 
-	| +uart_tx_0 | 11/11  | 25/25     | 26/26 | 0/0       | 0/0  | 
-	+------------------------------------------------------------+
+	| top/       | 3/54   | 9/101     | 1/144 | 0/4       | 1/1  |
+	| +system    | 0/29   | 0/43      | 0/81  | 0/4       | 0/0  |
+	| ++bram     | 0/0    | 0/0       | 0/0   | 4/4       | 0/0  |
+	| ++cpu      | 29/29  | 43/43     | 81/81 | 0/0       | 0/0  |
+	| +uart_rx_0 | 11/11  | 24/24     | 38/38 | 0/0       | 0/0  |
+	| +uart_tx_0 | 11/11  | 25/25     | 24/24 | 0/0       | 0/0  |
+	+-------------------------------------------------------------+
 	No LUTRAM/BUFIO/DSP48A1/BUFR/DCM/PLL_ADV used
 
 The above is indicative only as the actual resources used may vary from
 commit to commit, but also because of the tool chain and FPGA targeted.
 
 Even given that though it is clear that this system is *small*. The CPU
-only occupies 27 slices, which is only a little larger than the bit-serial
+only occupies 29 slices, which is only a little larger than the bit-serial
 CPU available at <https://github.com/howerj/bit-serial>, and this 16-bit CPU
 is *much* faster.
 
@@ -90,39 +91,43 @@ To build for an FPGA you will need `Xilinx ISE 14.7`:
 
 	make synthesis implementation bitfile
 
-The system has not been tested on an FPGA at the moment. If you have any luck,
-let me know.
-
 # Instruction Set and System Design
 
 A short summary of the instruction set and design:
 
-* The machine is an accumulator based machine.
+* The machine is accumulator based.
 * All instructions are 16-bits in length.
-* The top four bits determine the instruction.
-* The lowest four bits are the operand parameter.
+* The top four bits determine the instruction to be executed.
+* The lowest twelve bits are the operand parameter.
 * Addresses are in number of 16-bit cells, not bytes.
 * The program counter is 8-bits in size and is advanced with a LFSR.
-* The top most bit determined whether the operand is used directly or 
-whether or it loaded first.
+* The top most bit, part of the 4-bit instruction selector, determines 
+whether the operand is used directly or whether or it loaded first.
+* It is possible to configure at time of synthesis many parameters
+of the core (polynomial value and LFSR width, jump conditions, using an 
+add instruction, and more), not all of which are compatible with
+the Forth image in the hex file `lfsr.hex`.
 
 The instruction set has been carefully chosen so that it
-should be very simple to implement in a traditional manner,
-or in a bit-serial fashion (much like my other CPU project at
-<https://github.com/howerj/bit-serial> that runs on an FPGA). It has
-also been designed so that it should be possible to implement in 7400
-series logic ICs (excluding ROM and RAM) as well as on an FPGA. There
-may be no savings in logic on an FPGA due to the fact that slices
+should be very simple to implement in a bit-serial fashion
+(much like my other CPU project at
+<https://github.com/howerj/bit-serial> that runs on an FPGA), or
+in the traditional bit parallel way. 
+
+It has also been designed so that it should be possible to implement 
+in 7400 series logic ICs (excluding ROM and RAM) as well as on an 
+FPGA. There may be no savings in logic on an FPGA due to the fact that slices
 have a built in carry chain (usually), but a comparison could be made
 when the system is implemented on an FPGA (This has been done, there
-is very little difference).
+is very little difference, but it is slightly smaller and faster than
+using an adder even on an FPGA).
 
 As the Program Counter does not use addition, it was decided that
 addition should be removed from the instruction set. It would be a
 bit weird to worry about all the gates the Program Counter is using and
 then just include an adder elsewhere. The ADD instruction is sorely
 missed and makes the Forth code more complex and slows it down. The
-only other instruction that feels like it should be present (to me)
+only other instruction that feels like it should be present
 is bit-wise OR, in practice it is not used that much within the
 interpreter so it not missed, it is reimplemented using bitwise AND
 and INVERT (XOR against all bits set).
@@ -135,7 +140,7 @@ The instruction layout is:
 	| INDIRECT | INSTRUCTION   | VALUE   / ADDRESS |
 	+----------+---------------+-------------------+
 
-The `INDIRECT` flag determined whether bits 0 to 11 are treated as
+The `INDIRECT` flag determines whether bits 0 to 11 are treated as
 a value (not set) or an address (`INDIRECT` is set).
 
 The `INSTRUCTION` field is 3-bits in size, the instructions are:
@@ -151,8 +156,11 @@ The `INSTRUCTION` field is 3-bits in size, the instructions are:
 
 All instructions advance the program counter except `JUMP`, and
 (conditionally) `JUMPZ`. All instruction affect or use the accumulator
-except the jump instructions. `MEM` consists of a linear array of 
-16-bit values.
+except the `JUMP` instruction (`JUMPZ` reads the accumulator value). 
+`MEM` consists of a linear array of 16-bit values.
+
+`XOR` is the first instruction, allowing instructions containing
+all zeros to act as a NOP instruction if needed.
 
 There is one special address, address 0. This address is never
 incremented after an instruction is run as this is a lock up state for
@@ -162,7 +170,7 @@ address `1`, however any non-zero address will do. The system starts
 up executing from address zero. Conditional jumps could be used to
 determine whether to reset or halt the system if needed. Alternatively
 a LFSR that used XNOR could have been used (the lockup state for which 
-is all ones) but it was not.
+is all ones) but it was not as the jump mechanism is satisfactory.
 
 `ACC` is the 16-bit accumulator.
 
@@ -174,11 +182,11 @@ Input and Output is memory mapped, reading from a negative address
 (high bit set) causes a byte to be read or output. This is triggered
 from reading or writing to any negative address, if multiple
 peripherals are to be added the address will have to be decoded
-correctly.
+differently.
 
 For the purposes of simulation `JUMP` will cause the CPU to halt if
-the jump address is the same as the program counter. This will not
-be implemented in hardware.
+the jump address is the same as the program counter. This is not
+implemented in hardware.
 
 The program counter uses a 8-bit LFSR to advance, that means only 256
 16-bit values can be directly addressed by this CPU, this is not a
@@ -188,9 +196,9 @@ Machine that supports Forth can be written in under 256 instructions
 for this system. That Forth Virtual Machine can address more memory
 by using LOAD/STORE to access values outside the 256 instruction range.
 
-This instruction set might change depending on the implementation,
-or when it comes to implementation, to make things easier and smaller
-still.
+The instruction set is liable to change in the future if it is possible
+to make the system even smaller by doing so and still support a fully
+functional Forth interpreter.
 
 # State machine diagrams
 
@@ -257,7 +265,7 @@ And compare with:
 You will notice differences, however they should be minor, obvious, and mostly
 related to VHDL report messages. The instructions executed should be identical
 so long as the input is identical, to make sure this is the case the line
-endings also need to be made to be identical for both inputs.
+endings also need to be made to be identical for both input streams.
 
 Empirically the system averages 2.4 clock cycles (or 2.4 state changes) to execute a 
 single instruction, this was measured by executing the default Forth image and feeding
@@ -288,15 +296,16 @@ instruction cycle length.
 
 # To Do / Future Directions
 
-* Improve the documentation; the addition of timing diagrams, terminal capture
-  of the simulation running, state-machine diagrams and the like would all
-  help. Much of the documentation from the sister project could be incorporated
-  into this one.
+* Improve the documentation; timing diagrams, more terminal capture,
+  documentation from the sister project, and more information on the Forth
+  interpreter itself could all be added.
+* The Forth available at <https://github.com/howerj/subleq> is more advanced
+  and could be reintegrated into this project.
 * Optimize the CPU core:
   - The Input/Output system could be reworked, making I/O truly memory mapped.
 * See <https://github.com/howerj/lfsr> for more information and suggestions.
 * The number of these devices that could fit on one device could be quite
-  large, limited perhaps by the number of Block RAMs available. Modifications
+  large, limited by the number of Block RAMs available. Modifications
   would have to be made to program and interact with a matrix of these CPUs,
   but it might be a neat thing to do. They could take their input from the same
   UART and the same starting commands or boot image, synchronization could be 
@@ -307,13 +316,15 @@ instruction cycle length.
   and pseudo peripherals.
 * The `lfsr.vhd` file is quite configurable with many generics, the tool-chain
   could be made to generate Forth images that deal with the variants.
-* A Dual-Port version of the CPU would be faster, although require more resources,
-  this CPU in its current form can share one half a Dual Port Block RAM allowing
-  very fast memory mapped I/O.
+* A Dual-Port version of the CPU would be faster, although it would require more 
+  resources. This CPU in its current form can share one half a Dual Port Block RAM 
+  allowing very fast memory mapped I/O.
 * The eForth image could be turned into ROM sections (the Forth Virtual Machine
   and the initial Forth dictionary could go here) and sections that can be stored
   in RAM. This ROM/RAM version would also execute faster, provided only the Forth
   VM was to be stored in ROM.
+* Alternatively a Harvard version of the CPU could be made, the Forth VM stored
+  in ROM, perhaps even encoded within the VHDL file for the LFSR CPU itself.
 * A bit-serial version of this CPU could be made, it might be smaller, it would
   certainly be slower.
 * A simulation written in VHDL using components based off of real 7400 series
