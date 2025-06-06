@@ -9,7 +9,7 @@
 -- advance to the next state. Historically this was very rarely used to save on 
 -- the number of gates used to implement a PC as a LFSR requires fewer gate than
 -- an adder. It is actually possible to use an adder, selectable via a generic,
--- instead if you so wish.
+-- instead if you so wish, but this requires a new hex file.
 --
 -- Although this CPU is quite odd, it is capable of running a full blown
 -- programming language called Forth. The image to do this should be part of
@@ -19,14 +19,16 @@
 -- In the default configuration this 16-bit Accumulator CPU only has an
 -- 8-bit Program Counter, which means it can only address 256 16-bit values.
 -- This is enough to implement a Virtual Machine which can address the full
--- range a 16-bit value allows (65536 cells).
+-- range a 16-bit value allows (65536 cells), although the CPU itself can
+-- only access 12-bit memory addresses (8192 16-bit cells) along with 32768
+-- bytes of Input/Output space.
 --
 -- The CPU is a proof-of-concept, although when laying gates out by hand in 
 -- silicon there is a saving in numbers of gates (and also a potential speed 
 -- boost compared to a normal adder) due to the way the primitives on an FPGA 
--- are implemented there is most likely no saving at all (the building blocks,
--- Slices and Configurable Logic Blocks on Xilinx devices) contain logic
--- to help implement the carry logic needed by an adder efficiently.
+-- are implemented there is most likely no saving at all as the building blocks,
+-- Slices and Configurable Logic Blocks on Xilinx devices, contain logic
+-- to help efficiently implement the carry logic needed by an adder.
 --
 -- The CPU starts executing at address 0, which is a special value for a
 -- XOR based LFSR in that it is a lockup state from which there is no escape.
@@ -154,7 +156,7 @@ architecture rtl of lfsr is
 	constant AZ: std_ulogic_vector(N - 1 downto 0) := (others => '0'); -- All Zeros
 
 	-- These constants are used to index into the jump specification, this allows
-	-- us to make alternative OISC machines by specifying a generic instead of making
+	-- us to make alternative machines by specifying a generic instead of making
 	-- an entirely new machine.
 	constant JS_C:   integer := 0; -- Jump on all condition or'd = '1' or '0'
 	constant JS_ZEN: integer := 1; -- Enable Jumping on zero comparison 
@@ -245,7 +247,7 @@ begin
 	obyte <= c.acc(obyte'range) after delay;
 	re    <= not dop after delay;
 	we    <= dop after delay;
-	ra <= c.acc after delay;
+	ra    <= c.acc after delay;
 
 	process (clk, rst) 
 	begin
@@ -269,7 +271,7 @@ begin
 		end if;
 	end process;
 
-	process (c.pc, jump, npc, ra, rb, alu, i)
+	process (c.pc, jump, npc, ra, rb, alu, i) -- The ALU
 	begin
 		rout <= ra after delay;
 		raddr <= (others => '0') after delay;
@@ -296,7 +298,7 @@ begin
 		alias indirect is i(i'high); -- old versions of GHDL have problems with these aliases.
 		alias alubits is i(i'high - 1 downto i'high - 3);
 		alias operand is i(i'high - 4 downto 0);
-	begin
+	begin -- No microcode, just a state machine
 		f      <= c after delay;
 		io_we  <= '0' after delay;
 		io_re  <= '0' after delay;

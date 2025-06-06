@@ -294,7 +294,166 @@ instruction cycle length.
 	Total Instructions executed: 3093307 
 	Total Instruction cycles: 7475308
 
-# To Do / Future Directions
+# Inspiration and other designs
+
+It has been mentioned that the instruction set is similar to the PDP-8
+<https://en.wikipedia.org/wiki/PDP-8#Instruction_set>, this is
+a coincidence.
+
+The PDP-8 has an interesting instruction set, especially the IOT (Input-Output 
+Transfer) and OPR (microcoded operations, which looks like it applies a set of 
+operations to the accumulator in sequence depending on if a bit is set, such 
+as shift left/right by 1, compliment, clear, ...) instructions. Implementing 
+something similar to those instructions would make the system bigger for no real 
+gain.
+
+The reasons for the similarity are the fact there is only so much you can do
+with a 3/4-bit instruction set with an accumulator machine.
+
+The real inspiration for this CPU was the 4-bit TMS 1000, as used in the Speak and
+Spell, and the 4-bit NES (Nintendo Entertainment System) CIC chip. I know little
+about the internals of those systems apart from the fact they exist and they
+use a LFSR (well, a Polynomial Counter) instead of normal adder as a 
+Program Counter.
+
+See:
+
+* <https://github.com/mikeakohn/tms1000_fpga>
+* <https://en.wikipedia.org/wiki/Texas_Instruments_TMS1000>
+* <https://sheep-thrills.net/NES_lockout_chip_address_smartness.html>
+* <https://en.wikipedia.org/wiki/Speak_%26_Spell_(toy)>
+
+Although it was not an explicit goal there is an appeal in making an
+incredibly tiny CPU, this one is of comparable size to the PicoBlaze, 
+an 8-bit Soft Micro Controller, specifically design for Xilinx FPGAs, see 
+<https://en.wikipedia.org/wiki/PicoBlaze>. It is also known as Ken Chapman's
+Programmable State Machine. It fits in 26-30 slices (or more, depending on
+the source), but it is Xilinx specific, it directly instantiates low level 
+Xilinx primitives and constrains them with platform specific extensions.
+
+This CPU fits into 29 slices without making it Xilinx specific, this means
+that there is a lot of potential to shrink the CPU even more.
+
+This LFSR based CPU could be used for a similar purpose as the PicoBlaze,
+however this LFSR CPU is more difficult to program when using assembly and 
+does lack some features that the PicoBlaze has (such as interrupts). The 
+PicoBlaze runs faster, is more well known, and has a much more conventional
+instruction set even it is quite a limited and odd device itself.
+
+This LFSR CPU does have the advantage of it being programmable in Forth 
+however (a disadvantage for some!), and interactively programmable as well.
+Programming the device in Forth is not free, as the Forth is implemented on top
+of a Virtual Machine there is a slow down.
+
+Below is table containing a comparison of both the PicoBlaze and this
+LFSR CPU:
+
+	+-------------------------+---------------------------+----------------------------------+
+	|                         | LFSR CPU                  | PicoBlaze                        |
+	+-------------------------+---------------------------+----------------------------------+
+	| Architecture Overview:  | 16-bit CPU with           | 8-bit CPU with 18-bit Instr.     |
+	|                         | 8-bit PC (configurable)   |                                  |
+	|                         | Accumulator Machine       | Register Machine                 |
+	| CPU Type:               | Von Neumann               | Harvard (extra logic needed      |
+	|                         |                           | to turn this into Von Neumann)   |
+	| Slice Usage:            | 25-29 (variant dependent) | 26-30 (according to source code) |
+	| Programmed in:          | Assembly, Forth           | Assembly Only                    |
+	| FPGA Specific:          | NO                        | Xilinx only                      |
+	| Instruction Addr Space: | 256x16-bit Instructions   | 1024x18-bit Instructions         |
+	|                         | (configurable)            |                                  |
+	| Address Space (Max):    | 4096x16-bit               | N/A (64x8 for scratch pad)       |
+	|                         | (256 instructions are in  |                                  |
+	|                         | this space).              |                                  |
+	| Function Calls:         | NO                        | YES                              |
+	| Has Interrupts:         | NO                        | YES                              |
+	| Instructions available: | 16                        | 69                               |
+	| Add with carry?         | NO ADD! (configurable)    | YES                              |
+	| Multiplier?             | NO                        | NO                               |
+	| Divider?                | NO                        | NO                               |
+	| Rotate?                 | NO                        | NO                               |
+	| Indirect Jumps?         | Conditional and Uncond.   | Unconditional Only.              |
+	| Shift?                  | Yes, 1 bit only           | Yes, 1 bit only, multiple types  |
+	| Jump?                   | On zero/non-zero          | Zero/Non-Zero/Carry/Non-Carry    |
+	|                         | (configurable)            |                                  |
+	| Program Counter         | Uses LFSR                 | Normal, sane, increment          |
+	| Input/Output            | Memory Mapped             | Instruction Port Based           |
+	| I/O Address space       | 32678 x 8-bit             | 256 x 8-bit                      |
+	| Programming Difficulty  | Very Difficult (Assembly) | Difficult to Moderate (Assembly) |
+	| (very subjective)       | Moderate (Forth)          |                                  |
+	+-------------------------+---------------------------+----------------------------------+
+
+As mentioned there is a lot more documentation around the PicoBlaze, and not
+just documentation but examples of both program code and many more instances of
+PicoBlaze being integrated within projects in both VHDL and Verilog. The power
+of a community should not be understated when comparing technical solutions,
+and here the PicoBlaze, a design not yet obsolete but getting on in age, wins out.
+
+One subjective comparison is the difficulty in programming each solution,
+naturally you would expect the author to be biased towards their own creation,
+however it is clear that when programming the devices at the assembly level
+that the PicoBlaze is much easier to program.
+
+The tool-chain for LFSR CPU however eventually builds a Forth implementation
+upon a VM build in LFSR assembly. It is usually easier to program in Forth than
+it is in assembly, although there are people that would disagree with this.
+
+It should be noted that when moving from assembly to Forth a capability is
+lost, the ability to count instructions and respond in a far more predictable
+manner. It is possible with PicoBlaze to count instructions if needed, and even
+if instructions are not counted the PicoBlaze can certainly respond to an event
+much quicker than the LFSR CPU.
+
+Given a Forth interpreter exists for the LFSR CPU there are many routines that
+exist as part of the base image that might need to be implemented for the
+PicoBlaze, we can see this be typing in the "words" command:
+
+	quit info eval dump immediate \ ( $" ." exit r@ r> >r compile ' next
+	for then if again until begin ; : see words word interpret compile,
+	literal find compare number? >number parse -trailing .s . u. u.r sign
+	<# #s # #> hold spaces query accept cr space cmove type key um/mod
+	um* um+ throw catch +string min max mux abs , allot count depth align
+	aligned pick cell+ u< 0> > < 0< 0>= <> = +! 2dup 2drop rot tuck nip
+	over [ ] last source hex here >in base hld dpl state key? emit c! c@
+	0= execute or swap drop dup ! @ xor and bye cell bl lshift rshift
+	?dup 2/ 2* - negate invert 1- +
+
+Note that this includes; an interactive programming environment, a method
+of dumping sections of memory, functions for moving sections of memory, basic
+string handling, numeric input, numeric output, multiplication, division, add
+with carry, structured programming constructs, terminal handling, and more.
+
+More Forth software and routines can be ported and are available at
+<https://github.com/howerj/subleq>, such as a built in decompiler, a floating
+point word set, a memory allocator, cooperative multitasking, 32-bit
+arithmetic, and more.
+
+Forth is niche language, but there is more Forth out there than there is
+PicoBlaze assembly, PicoBlaze might have a community larger than the
+(non-existent) one around the LFSR CPU but it is still very small, smaller than
+the small Forth community.
+
+Forth also has the advantage of being very small, the functions shown with the
+"words" command and the interpreter loop all weigh in at 4316 bytes in size,
+leaving just under half of the memory available for the rest of the
+application. It is possible to write incredibly compact Forth code, and of
+course if much of the functionality present in the base system is not needed it 
+can be removed. 4316 bytes is not the size of a minimal Forth system, it is
+the size of a minimal interactive programming environment.
+
+# Previous Posts
+
+This project has been posted online at:
+
+* <https://hackaday.com/2025/05/31/can-we-replace-a-program-counter-with-a-linear-feedback-shift-register-yes-we-can/>
+* <https://old.reddit.com/r/FPGA/comments/1flm3pw/weird_cpu_lfsr_as_a_program_counter/>
+* <https://news.ycombinator.com/item?id=44155635>
+
+There are some interesting comments on those posts.
+
+# Future Directions
+
+These bullet points should not be viewed as a "To Do" list, but instead as a
+series of thoughts about the project.
 
 * Improve the documentation; timing diagrams, more terminal capture,
   documentation from the sister project, and more information on the Forth
@@ -395,5 +554,6 @@ instruction cycle length.
 [LFSR]: https://en.wikipedia.org/wiki/Linear-feedback_shift_register
 [7400]: https://en.wikipedia.org/wiki/7400-series_integrated_circuits
 [Tiny Tapeout]: <https://tinytapeout.com/>
+
 
 
